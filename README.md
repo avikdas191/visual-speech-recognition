@@ -37,13 +37,15 @@ gesture starts recording
 -> fine-tuned T5-small generates a sentence containing that word
 ```
 
-![Grid image assembled from 60 lip crops](docs/media/grid_image_eat.png)
+<p align="center">
+  <img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
+  <br>
+  <em>A complete input to the model: 60 lip crops from one recording, tiled six columns across and ten rows down. Reading left to right, top to bottom, the sequence is the mouth movement over time.</em>
+</p>
 
 *A complete input to the model: 60 lip crops from one recording, tiled six
 columns across and ten rows down. Reading left to right, top to bottom, the
 sequence is the mouth movement over time.*
-
-<img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
 
 The words are bat, cup, drop, eat, fish, hot, jump, milk, pen and red, all
 single-syllable. The dataset is 600 videos: one speaker, ten words, sixty
@@ -171,18 +173,28 @@ a locally served page reporting every step. Slower and more awkward than the
 desktop application, but it keeps the full processing trail visible, which is
 more useful for understanding how the system works.
 
-![Web application at startup](docs/media/web_application_start.png)
+<p align="center">
+  <img src="docs/media/web_application_start.png" width="600" alt="Web application at startup">
+  <br>
+  <em>Startup: both models load, then the camera opens.</em>
+</p>
 
 *Startup: both models load, then the camera opens.*
 
-![Web application during processing](docs/media/web_application_processing.png)
+<p align="center">
+  <img src="docs/media/web_application_processing.png" width="600" alt="Web application during processing">
+  <br>
+  <em>Each stage of the pipeline reports itself. The recognised word and the generated sentence appear in green on the right.</em>
+</p>
 
 *Each stage of the pipeline reports itself. The recognised word and the
 generated sentence appear in green on the right.*
 
-<img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
-
-![Web application ready for another recording](docs/media/web_application_reset.png)
+<p align="center">
+  <img src="docs/media/web_application_reset.png" width="600" alt="Web application ready for another recording">
+  <br>
+  <em>The blue button clears the trail and starts a new session without reopening the camera.</em>
+</p>
 
 *The blue button clears the trail and starts a new session without reopening the
 camera.*
