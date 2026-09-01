@@ -43,6 +43,8 @@ gesture starts recording
 columns across and ten rows down. Reading left to right, top to bottom, the
 sequence is the mouth movement over time.*
 
+<img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
+
 The words are bat, cup, drop, eat, fish, hot, jump, milk, pen and red, all
 single-syllable. The dataset is 600 videos: one speaker, ten words, sixty
 recording sessions varying in location, lighting and head angle.
