@@ -40,12 +40,9 @@ gesture starts recording
 <p align="center">
   <img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
   <br>
-  <em>A complete input to the model: 60 lip crops from one recording, tiled six columns across and ten rows down. Reading left to right, top to bottom, the sequence is the mouth movement over time.</em>
+  <em>A complete input to the model: 60 lip crops from one recording, tiled six columns across and ten rows down.
+  Reading left to right, top to bottom, the sequence is the mouth movement over time.</em>
 </p>
-
-*A complete input to the model: 60 lip crops from one recording, tiled six
-columns across and ten rows down. Reading left to right, top to bottom, the
-sequence is the mouth movement over time.*
 
 The words are bat, cup, drop, eat, fish, hot, jump, milk, pen and red, all
 single-syllable. The dataset is 600 videos: one speaker, ten words, sixty
@@ -179,25 +176,17 @@ more useful for understanding how the system works.
   <em>Startup: both models load, then the camera opens.</em>
 </p>
 
-*Startup: both models load, then the camera opens.*
-
 <p align="center">
   <img src="docs/media/web_application_processing.png" width="600" alt="Web application during processing">
   <br>
   <em>Each stage of the pipeline reports itself. The recognised word and the generated sentence appear in green on the right.</em>
 </p>
 
-*Each stage of the pipeline reports itself. The recognised word and the
-generated sentence appear in green on the right.*
-
 <p align="center">
   <img src="docs/media/web_application_reset.png" width="600" alt="Web application ready for another recording">
   <br>
   <em>The blue button clears the trail and starts a new session without reopening the camera.</em>
 </p>
-
-*The blue button clears the trail and starts a new session without reopening the
-camera.*
 
 Both applications import the same pipeline module, so both run identical
 processing.
