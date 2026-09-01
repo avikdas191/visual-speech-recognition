@@ -1,0 +1,1 @@
+{"config": "m18_eff_epochs80", "seed": 22, "total_params": 20108717, "trainable_params": 16059146, "epochs_run": 80, "train_samples": 900, "final_train_acc": 0.9911110997200012, "final_val_acc": 0.7450000047683716, "best_val_acc": 0.7900000214576721, "best_val_loss": 0.7076462507247925, "best_epoch": 27, "seconds": 205.3}

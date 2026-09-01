@@ -1,0 +1,379 @@
+Systematic architecture build-up - results
+==========================================
+
+689 training runs across 65 configurations, testing architecture depth,
+dense layer width and depth, kernel size, dataset volume, epoch count
+and L2 regularisation strength.
+
+Outcome: every stable configuration lands between 0.70 and 0.78 on
+validation. The best test result matches the baseline. No architecture
+in this family does better.
+
+
+WHY THIS STAGE EXISTS
+---------------------
+Earlier stages tested architecture variations against the existing
+baseline and stopped when nothing improved. This stage starts below the
+baseline in complexity and builds upward, testing every level against
+multiple dataset volumes rather than one.
+
+The reasoning for doing it: the pretrained backbone work had shown that
+persisting past an initial poor result produced genuine findings - the
+first MobileNetV2 configuration scored 0.310 and looked like a dead end,
+and pushing further revealed that global average pooling was the cause
+and that EfficientNetB0 features transfer far better. Nothing simpler
+than the two-conv baseline had ever been tested here.
+
+
+SETUP
+-----
+Datasets, all previously built:
+
+  d90   06_dataset_final       90 images per word   (42 real + 48 aug)
+  d138  06v_dataset_volume    138                   (42 + 96)
+  d186  06h_dataset_vol144    186                   (42 + 144)
+  d234  06i_dataset_vol192    234                   (42 + 192)
+  d330  06j_dataset_vol288    330                   (42 + 288)
+
+Three seeds per cell (11, 22, 33). Adam, batch 16, rescale 1/255,
+224x224 input. Validation only - test was touched once, at the end.
+
+A configurable worker builds any architecture from a flat specification
+(conv filter list, dense unit list, kernel size, activation, head type,
+dropout, batch norm, L2 strength, learning rate, epochs, batch size),
+so adding a configuration is one dictionary entry.
+
+
+A-SERIES: DEPTH, FROM MINIMAL UPWARD
+------------------------------------
+Seven architectures on all five datasets, at 15 and 50 epochs.
+
+  a0_1conv16       conv 16                  no dense        2.0M
+  a2_2conv         conv 32,64               no dense        2.0M
+  a1_1conv32       conv 32                  no dense        4.0M
+  a6_3conv_narrow  conv 16,32,64            dense 256,128  12.9M
+  a3_2conv_d128    conv 32,64               dense 128      25.7M
+  a5_3conv         conv 32,64,128           dense 256,128  25.8M
+  a4_baseline      conv 32,64               dense 256,128  51.4M
+
+Best validation, 15 epochs:
+
+  config             d90    d138   d186   d234   d330
+  a0_1conv16       0.6550 0.7017 0.7050 0.7233 0.6850
+  a1_1conv32       0.6700 0.7167 0.7067 0.7283 0.6683
+  a2_2conv         0.6567 0.7117 0.6950 0.7150 0.6950
+  a3_2conv_d128    0.7000 0.7333 0.7167 0.7417 0.7067
+  a4_baseline      0.7183 0.7467 0.7383 0.7600 0.7483
+  a5_3conv         0.7367 0.7217 0.7133 0.7650 0.7050
+  a6_3conv_narrow  0.7133 0.7200 0.6983 0.7483 0.7167
+
+Two findings.
+
+DATASET: d234 is the best dataset for every one of the seven
+architectures without exception. That consistency across seven
+independent models is stronger evidence than any single configuration's
+advantage. d90 is worst for six of seven.
+
+Mean best_val by dataset, across all seven configs:
+  d234 0.7402 | d138 0.7217 | d186 0.7090 | d330 0.7036 | d90 0.6993
+
+Note that d330 - the largest dataset at 330 images per word - is fourth
+of five. More augmented volume past d234 does not help, consistent with
+the augmentation stage's finding.
+
+DENSE LAYERS MATTER MORE THAN CONV DEPTH: a0, a1 and a2 have no dense
+layers and are the three worst configurations. Adding a single Dense(128)
+to the same two conv layers (a2 -> a3) gains 2.7 points on d234.
+
+
+EPOCH COUNT
+-----------
+The a-series was rerun at 50 epochs on the three strongest datasets.
+
+  config           d90 15ep -> 50ep    d138           d234
+  a0_1conv16       0.6550 -> 0.6900    0.7017->0.7450 0.7233->0.7233
+  a1_1conv32       0.6700 -> 0.6833    0.7167->0.7500 0.7283->0.7283
+  a2_2conv         0.6567 -> 0.6900    0.7117->0.7417 0.7150->0.7250
+  a3_2conv_d128    0.7000 -> 0.7117    0.7333->0.7367 0.7417->0.7417
+  a4_baseline      0.7183 -> 0.7333    0.7467->0.7650 0.7600->0.7700
+  a5_3conv         0.7367 -> 0.7350    0.7217->0.7250 0.7650->0.7633
+  a6_3conv_narrow  0.7133 -> 0.7133    0.7200->0.7267 0.7483->0.7567
+
+The single-conv architectures gained most - a0 and a1 by 3-4 points on
+d138 - which fits: they had not converged at 15 epochs. Everything with
+two or more conv layers gained little.
+
+Two caveats on reading this.
+
+First, best_val_acc is a maximum over the epochs run, so it is
+mechanically higher for 50 epochs than 15 regardless of whether the
+extra training helps. The comparison that is not inflated is
+final_val_acc, and there most configurations LOSE ground between 15 and
+50 epochs.
+
+Second, and more important: the epoch at which validation loss bottoms
+varies enormously between seeds of the same configuration. For
+a4_baseline on d234 the three seeds peaked at epochs 40, 5 and 15. Mean
+spread across all 21 config-dataset cells is 12.9 epochs, median 10,
+maximum 35.
+
+Seed variance also exceeds the entire effect of epoch choice. At any
+fixed epoch, three seeds of one configuration span 3.3 to 4.3 points of
+validation accuracy, while moving between epochs 20 and 50 shifts the
+mean by 0.8 to 3.4 points. For six of seven configurations, seed noise
+is two to four times the epoch effect.
+
+Across all 63 fifty-epoch runs, not one peaked at epoch 50. Thirty of
+63 peaked at epoch 15 or earlier, 48 by epoch 25. Subsequent series
+used 25 or 30 epochs on this basis.
+
+
+B-SERIES: DENSE WIDTH
+---------------------
+The a-series used dense layers of 256 units or none. This series fills
+the gap, at 30 epochs on d90, d138 and d234.
+
+  config              conv          dense       params   best_val (mean)
+  b2_2conv_d128_64    32,64         128,64      25.7M      0.7528
+  b3_2conv_d64_32     32,64         64,32       12.9M      0.7511
+  b5_3conv_d128_64    32,64,128     128,64      12.9M      0.7345
+  b6_3conv_d64_32     32,64,128     64,32        6.5M      0.7261
+  b0_2conv_d64        32,64         64          12.9M      0.7211
+  b8_4conv_d64        32,64,128,256 64           3.6M      0.7217
+  b4_3conv_d64        32,64,128     64           6.5M      0.7228
+  b7_4conv_d128       32,64,128,256 128          6.8M      0.7128
+  b1_2conv_d32        32,64         32           6.4M      0.7033
+
+b2 reaches 0.7717 on d138 - the highest figure of the a and b series.
+
+TWO DENSE LAYERS BEAT ONE at every width and depth tested. b2 (128,64)
+beats b0 (64) by 5.2 points on d138; b3 (64,32) beats b0 by 4.2. The
+same holds in the three-conv group: b5 beats b4, b6 beats b4.
+
+WIDTH HAS A FLOOR. b1 at Dense(32) is the worst configuration in the
+series. Below about 64 units, information is lost.
+
+WIDTH HAS A CEILING TOO. b2 (128,64) at 25.7M parameters matches
+a4_baseline (256,128) at 51.4M. Doubling the dense width buys nothing.
+
+CONV DEPTH BEYOND TWO DOES NOT HELP. Every three- and four-conv variant
+sits below its two-conv counterpart at the same dense configuration.
+
+
+C-SERIES: THREE DENSE LAYERS, WIDER CONV, KERNEL SIZE
+-----------------------------------------------------
+Nine configurations at 30 epochs, built on b2 and b3 as references.
+
+  config                  d90    d138   d234   mean
+  c8_2conv_d96_48       0.7250 0.7550 0.7450 0.7417
+  c4_2conv_k5_d128_64   0.7333 0.7400 0.7517 0.7417
+  c6_2conv_k5_d64_32    0.7283 0.7333 0.7533 0.7383
+  c0_2conv_d128_64_32   0.6983 0.7283 0.7367 0.7211
+  c1_2conv_d64_32_16    0.6817 0.6967 0.7050 0.6944
+  c2_2conv_wide_d128_64 0.5250 0.7633 0.7650 0.6844
+  c5_2conv_k7_d128_64   0.7200 0.5267 0.7467 0.6644
+  c3_2conv_wide_d64_32  0.5167 0.3267 0.5300 0.4578
+  c7_2conv_wide_k5      0.5283 0.3133 0.3183 0.3867
+
+THREE DENSE LAYERS IS WORSE THAN TWO. c0 (128,64,32) gives 0.7211
+against b2's (128,64) 0.7528. c1 (64,32,16) is worse still at 0.6944.
+Depth in the head hurts.
+
+KERNEL 5 WORKS, KERNEL 7 DOES NOT. c4 and c6 match the b-series, which
+is worth noting because a 5x5 kernel widens the receptive field faster
+than 3x3 - it changes the mechanism, not just the capacity, and
+performs the same. c5 at kernel 7 fails on d138.
+
+WIDER CONV FAILS OUTRIGHT ON SOME SEEDS. c2, c3 and c7 use 64 and 128
+filters. Their low scores are not degradation - they are complete
+training failures on specific seeds:
+
+  c7_2conv_wide_k5   d138 seed 22   train acc 0.0804
+  c7_2conv_wide_k5   d138 seed 33   train acc 0.0899
+  c7_2conv_wide_k5   d234 seed 22   train acc 0.0919
+  c3_2conv_wide_d64_32 d138 seed 11 train acc 0.0935
+  c2_2conv_wide_d128_64 d90 seed 11 train acc 0.0922
+  c5_2conv_k7_d128_64 d138 seed 33  train acc 0.0819
+
+Training accuracy of 0.08-0.10 on a ten-class problem is chance. The
+model never learned anything. Other seeds of the same configuration
+reach 1.0000 training accuracy and score normally - c2 gives 0.7650 on
+d234 while collapsing to 0.5250 on d90.
+
+Thirteen of 689 runs failed this way, all of them in configurations
+with 64-filter first conv layers or kernel size 7. The wide
+configurations are also the largest in the series - c2 and c7 exceed 51
+million parameters. Initialisation appears to determine whether they
+train at all.
+
+c8 (96,48) confirms that interpolating between b2 and b3 produces what
+interpolation produces: 0.7417, between them, as expected.
+
+
+L2 REGULARISATION
+-----------------
+Every configuration tested to this point reached 1.0000 training
+accuracy. Dropout had already been tested (Stage 2, two rates, two
+positions) with no effect, and reducing parameters fourteen-fold across
+the b-series had no effect either. L2 was the remaining untested
+mechanism.
+
+Ten architectures - the strongest from the a, b and c series - each at
+four strengths spanning three orders of magnitude, on three datasets,
+25 epochs. 360 runs.
+
+  Strengths: 1e-5, 1e-4, 1e-3, 1e-2
+  Applied to dense layers only, where 99% of the weights sit.
+
+RESULT: TRAINING ACCURACY IS EXACTLY 1.0000 IN ALL 360 RUNS.
+
+Every architecture, every dataset, every strength - including 1e-2,
+which is at the top of the usable range and should visibly damage
+training.
+
+Validation, averaged across all ten architectures:
+
+  no L2   0.7379
+  1e-5    0.7407
+  1e-4    0.7401
+  1e-3    0.7391
+  1e-2    0.7398
+
+A 0.3-point spread across four orders of magnitude, with no monotonic
+trend. That is not a weak effect; it is no effect.
+
+The clearest single indicator is the epoch at which validation loss
+bottoms. If L2 were affecting training, stronger regularisation would
+delay overfitting and push that epoch later. It does not move:
+
+  config       1e-5   1e-4   1e-3   1e-2
+  a4 (d138)    12.7   12.7   12.7   12.7
+  a6 (d138)    12.0   12.0   12.0   12.0
+  a5 (d138)     9.0    8.7    8.7    8.7
+
+Identical to one decimal place.
+
+Best figures: L2_b2_1e5 and L2_b2_1e3 both reach 0.7750 on d138,
+against plain b2's 0.7717. That is 0.33 points, under one validation
+image. The largest per-architecture gain is a4 at 1e-5, +1.8 points -
+a4 has the most dense parameters, so if L2 helped anywhere it should be
+there, and 1.8 points against 3-4 points of seed noise is not a result.
+
+
+THE TEST EVALUATION
+-------------------
+One configuration was evaluated on test: b2_2conv_d128_64 on d138.
+
+It was chosen not because it scored highest, but because the
+(2 conv, 2 dense at 128/64) family was at or near the top across the
+b-series, the c-series and the L2 sweep, under different epoch counts
+and regularisation settings. Consistency across independent sweeps is a
+better argument than any single validation figure.
+
+The L2 variant was not tested: it gained 0.33 points over plain b2,
+which is nothing, so the simpler model was the cleaner choice.
+
+Predicted in advance: 0.70-0.73 full test, 0.72-0.76 real-only.
+
+                     baseline    b2 on d138 (3 seeds)
+  full test (200)     0.7150     0.7100  (0.7050-0.7200)
+  real only (90)      0.7556     0.7296  (0.7000-0.7667)
+
+Both landed in the predicted range.
+
+The full test figures are effectively tied - 0.5 points apart, with the
+baseline inside b2's range. Real-only is 2.6 points lower, but b2's
+spread there is 6.7 points across three seeds, so that gap is not
+meaningful either.
+
+This is the first candidate in the project that did not collapse on
+test. The architecture stage's selection lost 4 points; the pretrained
+stage's lost 6 to 11. This one loses 0.5. The pattern is consistent: a
+smaller validation advantage produced a smaller reversal, which is what
+selection noise rather than a real effect pointing the wrong way would
+predict.
+
+WHAT IT BUYS: b2 matches the baseline's test performance with half the
+parameters - 25.7M against 51.4M. Not an accuracy result, but a
+legitimate efficiency one, and the third independent demonstration that
+the baseline is over-parameterised.
+
+
+WHAT THIS STAGE ESTABLISHED
+---------------------------
+ARCHITECTURE
+
+  - Two convolutional layers is the optimum. Three and four are worse
+    at every dense configuration tested.
+  - Two dense layers beat one, and beat three.
+  - Dense width between 64 and 128 is the useful range. Below 64 loses
+    information; above 128 adds parameters without benefit.
+  - Kernel 5 performs identically to kernel 3 despite a substantially
+    different receptive field. Kernel 7 destabilises training.
+  - Wide first conv layers (64 filters) cause complete training failure
+    on some initialisations.
+
+DATA
+
+  - d234 (234 images per word) is the best dataset for every
+    architecture in the a-series. d330 is worse than d234, so
+    augmented volume saturates somewhere between them.
+  - d90 - the dataset used for all earlier phases - is the worst of the
+    five for six of seven architectures.
+
+TRAINING
+
+  - Models with two or more conv layers converge by epoch 10-15.
+    Single-conv models need 20-30.
+  - No run of 63 at fifty epochs peaked at epoch 50.
+  - Seed variance (3-4 points) exceeds the effect of any epoch choice
+    between 20 and 50.
+
+MEMORISATION
+
+  - 666 of 689 runs reached 1.0000 training accuracy. Of the 23 that
+    did not, 13 were complete training failures and 3 were within 0.02
+    of 1.0.
+  - Dropout, fourteen-fold parameter reduction, and L2 at four
+    strengths all failed to prevent it.
+
+THE CEILING
+
+  Across four epoch settings and 65 configurations, every block's best
+  result falls between 0.765 and 0.775 on validation:
+
+    15 epochs, a-series      0.7650  (a5_3conv, d234)
+    25 epochs, L2 sweep      0.7750  (L2_b2_1e3 and 1e5, d138)
+    30 epochs, b and c       0.7717  (b2, d138)
+    50 epochs, a-series      0.7700  (a4_baseline, d234)
+
+  A one-point band across 65 architectures. The seed spread within any
+  single configuration is three to four points - larger than the entire
+  range between the best and worst of the top twenty.
+
+  No architecture in this family is distinguishable from any other at
+  the top.
+
+
+CONCLUSION
+----------
+The constraint is not the model.
+
+Sixty-five architectures spanning 2.0M to 51.6M parameters, five
+dataset volumes, four epoch settings and four regularisation strengths
+all extract approximately the same amount of information from the data.
+That is the signature of a data limit rather than a modelling one: 42
+recording sessions of a single speaker contain a fixed amount of
+information about how that speaker's mouth moves, and every reasonable
+configuration recovers essentially all of it.
+
+The baseline architecture is retained. b2_2conv_d128_64 is recorded as
+an equivalent alternative at half the parameter count.
+
+
+LOGS
+----
+  models_buildup/buildup_log.csv          689 runs, all series
+  models_buildup/history_*.csv            per-run epoch curves
+  models_buildup_test/buildup_test_log.csv  the single test evaluation
+  models_buildup_test/y_prob_*.npy          raw test predictions

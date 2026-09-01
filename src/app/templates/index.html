@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Lip Reading</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="stylesheet"
+          href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css">
+    <style>
+      body, html {
+        height: 100%;
+        margin: 0;
+        background: linear-gradient(to right, rgb(38, 51, 61), rgb(50, 55, 65), rgb(33, 33, 78));
+      }
+      .chat { margin-top: auto; margin-bottom: auto; }
+      .card {
+        height: 650px;
+        border-radius: 15px !important;
+        background-color: rgba(0,0,0,0.4) !important;
+      }
+      .msg_card_body { overflow-y: scroll; }
+      .msg_card_body::-webkit-scrollbar { display: none; }
+      .card-header { border-radius: 15px 15px 0 0 !important; border-bottom: 0 !important; }
+      .container { align-content: center; }
+      .user_img {
+        height: 70px; width: 70px; border: 1.5px solid #f5f6fa;
+      }
+      .user_img_msg {
+        height: 40px; width: 40px; border: 1.5px solid #f5f6fa;
+      }
+      .img_cont { position: relative; height: 70px; width: 70px; }
+      .img_cont_msg { height: 40px; width: 40px; }
+
+      .user_info { margin-top: auto; margin-bottom: auto; margin-left: 15px; }
+      .user_info span { font-size: 20px; color: white; }
+      .user_info p { font-size: 12px; color: rgba(255,255,255,0.6); }
+      .msg_cotainer {
+        margin-top: auto; margin-bottom: auto; margin-left: 10px;
+        border-radius: 25px; background-color: rgb(82, 172, 255);
+        padding: 10px; position: relative; color: white;
+      }
+      .msg_cotainer_result {
+        margin-top: auto; margin-bottom: auto; margin-right: 10px;
+        border-radius: 25px; background-color: rgb(46, 139, 87);
+        padding: 10px; position: relative; color: white;
+      }
+      .msg_head { position: relative; }
+
+      .control_btn {
+        background-color: rgba(0,0,0,0.4);
+        color: white;
+        border: 0;
+        border-radius: 15px;
+        padding: 10px 20px;
+        margin: 0 6px;
+        cursor: pointer;
+      }
+      .control_btn:disabled {
+        color: rgba(255,255,255,0.4);
+        cursor: default;
+      }
+      .control_btn.enabled_again {
+        background-color: rgb(82, 172, 255);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container-fluid h-100">
+      <div class="row justify-content-center h-100">
+        <div class="col-md-8 col-xl-6 chat">
+          <div class="card">
+            <div class="card-header msg_head">
+              <div class="d-flex bd-highlight">
+                <div class="img_cont">
+                  <img src="/static/favicon.ico" class="rounded-circle user_img">
+                </div>
+                <div class="user_info">
+                  <span>Lip Reading</span>
+                  <p>Visual word recognition and sentence generation</p>
+                </div>
+              </div>
+            </div>
+            <div id="messageFormeight" class="card-body msg_card_body"></div>
+          </div>
+          <div class="d-flex justify-content-center mt-3">
+                <button id="againButton" class="control_btn" disabled>Record another word</button>
+                <button id="quitButton" class="control_btn ml-2">Quit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let userScrolling = false;
+
+      document.getElementById("messageFormeight").addEventListener("scroll", () => {
+        const messageBody = document.getElementById("messageFormeight");
+        const isAtBottom =
+          messageBody.scrollHeight - messageBody.scrollTop <= messageBody.clientHeight + 10;
+        userScrolling = !isAtBottom;
+      });
+
+      async function fetchStatus() {
+        const response = await fetch('/get-status');
+        const data = await response.json();
+        const messageBody = document.getElementById("messageFormeight");
+
+        const previousScrollHeight = messageBody.scrollHeight;
+        const previousScrollTop = messageBody.scrollTop;
+
+        messageBody.innerHTML = "";
+
+        data.status.forEach((entry) => {
+          const messageDiv = document.createElement("div");
+          if (entry.result) {
+            messageDiv.className = "d-flex justify-content-end mb-4";
+            messageDiv.innerHTML = `
+              <div class="msg_cotainer_result">
+                ${entry.text}
+              </div>
+              <div class="img_cont_msg">
+                <img src="/static/favicon.ico" class="rounded-circle user_img_msg">
+              </div>
+            `;
+          } else {
+            messageDiv.className = "d-flex justify-content-start mb-4";
+            messageDiv.innerHTML = `
+              <div class="img_cont_msg">
+                <img src="/static/favicon.ico" class="rounded-circle user_img_msg">
+              </div>
+              <div class="msg_cotainer">
+                ${entry.text}
+              </div>
+            `;
+          }
+          messageBody.appendChild(messageDiv);
+        });
+
+        if (!userScrolling) {
+          messageBody.scrollTop = messageBody.scrollHeight;
+        } else {
+          messageBody.scrollTop =
+            previousScrollTop + (messageBody.scrollHeight - previousScrollHeight);
+        }
+      }
+      const againButton = document.getElementById("againButton");
+      const quitButton = document.getElementById("quitButton");
+
+      againButton.addEventListener("click", async () => {
+        againButton.disabled = true;
+        againButton.classList.remove("enabled_again");
+        await fetch('/record-again', { method: 'POST' });
+      });
+
+      quitButton.addEventListener("click", async () => {
+        await fetch('/quit', { method: 'POST' });
+      });
+
+      async function fetchSessionState() {
+        const response = await fetch('/session-state');
+        const data = await response.json();
+        againButton.disabled = !data.ready;
+        againButton.classList.toggle("enabled_again", data.ready);
+      }
+
+      setInterval(fetchSessionState, 1000);
+
+      setInterval(fetchStatus, 1000);
+    </script>
+  </body>
+</html>

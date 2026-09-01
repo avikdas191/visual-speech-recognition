@@ -1,0 +1,1 @@
+{"config": "J_vol288", "seed": 55, "train_samples": 3300, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.7250000238418579, "best_val_acc": 0.75, "best_val_loss": 0.8771741986274719, "best_epoch": 7, "seconds": 116.1}

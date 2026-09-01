@@ -1,0 +1,1 @@
+{"config": "c6_2conv_k5_d64_32", "dataset": "d90", "seed": 22, "params": 12901226, "train_samples": 900, "epochs": 30, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.6949999928474426, "best_val_acc": 0.7400000095367432, "best_val_loss": 0.8990825414657593, "best_epoch": 20, "seconds": 76.7}

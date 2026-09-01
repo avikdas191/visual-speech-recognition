@@ -1,0 +1,164 @@
+Training and evaluation on the rebuilt dataset
+==============================================
+
+Model: model_rebuilt_data.h5
+Seed: 202 (separate from split seed 4 and augmentation seed 101)
+
+
+WHICH ARCHITECTURE, AND WHY IT NEEDED DECIDING
+----------------------------------------------
+The deployed model file, model2811_36_21_d130.h5, contains two
+convolutional layers (32, 64) and 51,434,058 parameters.
+
+Its filename encodes a naming scheme used during the original project:
+2811 = 28 November, 361 = three conv layers 32/64/128, 21 = two dense
+layers 256/128, d130 = trained on the 130-image dataset, GOOD = a
+result worth keeping.
+
+The filename therefore describes a three-conv model, but the file
+contains two. The Flatten output of 200,704 (56 x 56 x 64) confirms
+this - a third conv layer would give 100,352 and roughly half the
+parameters.
+
+The training code in final_data_ready.ipynb defines the three-conv
+model the filename describes. So the surviving training code and the
+deployed model file are different networks, and the metrics recorded
+in that notebook come from the three-conv model, not the deployed one.
+
+The rebuild retrains the TWO-conv architecture, because that is what
+the deployed system loads and what Track A measured. Comparing across
+different architectures would confound the split with the model.
+
+The two-conv architecture was reconstructed from the .h5 metadata
+rather than copied from the notebook. Parameter count verified at
+51,434,058 before training - an exact match to the deployed file.
+
+
+CONFIGURATION
+-------------
+  Conv2D(32, 3x3, relu, padding=same)   -> MaxPool 2x2 stride 2
+  Conv2D(64, 3x3, relu, padding=same)   -> MaxPool 2x2 stride 2
+  Flatten -> Dense(256, tanh) -> Dense(128, tanh) -> Dense(10, softmax)
+
+  Input 224x224x3, rescale 1/255
+  Adam, learning rate 0.0001
+  categorical_crossentropy
+  batch size 16, 15 epochs
+
+All values match the original run. Nothing was tuned. The purpose of
+this stage is to isolate the effect of the split, so every other
+variable is held fixed.
+
+
+TRAINING BEHAVIOUR
+------------------
+  Epoch  1: train 0.0900   val 0.1350
+  Epoch  4: train 0.8211   val 0.5600
+  Epoch  7: train 0.9989   val 0.6850
+  Epoch  9: train 1.0000   val 0.7000
+  Epoch 11: train 1.0000   val 0.7400   (lowest val loss, 0.8807)
+  Epoch 15: train 1.0000   val 0.7350
+
+Training accuracy reaches 1.0000 by epoch 9 and training loss
+continues falling to 0.0085, while validation accuracy flattens around
+0.70-0.74 from epoch 7 onward. After epoch 7 the model is refining its
+fit to the 42 training sessions without learning anything that
+transfers to unseen ones.
+
+Validation loss reaches its minimum at epoch 11. Under early stopping
+those weights would have been selected. The original used a fixed 15
+epochs, and that was kept for comparability.
+
+For reference, the same architecture on the original split reached
+validation accuracy of approximately 0.98. The 24-point difference is
+the effect of removing session overlap between training and
+validation.
+
+
+EVALUATION: TWO PASSES
+----------------------
+Both passes use the same trained model.
+
+  Full test set  - 20 images per class, 200 total
+                   9 real recordings + 11 augmented per class
+                   Directly comparable to the original dataset's test
+                   set, which was also 20 per class.
+
+  Real only      - 9 images per class, 90 total
+                   The real recordings alone, no augmentation.
+                   Every image is an independent recording the model
+                   has never encountered in any form.
+
+The real-only figure is the primary measurement. It is the cleanest
+estimate of generalisation the project can produce. Its limitation is
+sample size: with 9 images per class, one image is 11 percentage
+points of that class's accuracy.
+
+The full-test figure exists for comparison with the original and is
+slightly lower, as expected - augmented images are harder than clean
+ones.
+
+
+RESULTS
+-------
+  Full test set (200 images)
+    loss 0.8225   accuracy 0.7150   macro-F1 0.7130
+
+  Real recordings only (90 images)
+    loss 0.6907   accuracy 0.7556   macro-F1 0.7537
+
+Both were verified by two independent routes: model.evaluate() and a
+manual predict-then-compare pass. The two agreed exactly in each case,
+confirming that predictions and labels are correctly aligned.
+
+This alignment check exists because the original evaluation code
+omitted shuffle=False on the test generator, so predictions and labels
+were compared in different orders. See audit_notes.md section 3.2.
+
+
+CONFUSION PATTERNS
+------------------
+Four confusions appear in both passes, which is what makes them worth
+reporting rather than treating as noise.
+
+  bat <-> pen    bidirectional. 4 and 6 in the full test, 2 and 2 in
+                 real-only.
+  milk -> pen    one-directional. 7 and 3.
+  red -> eat     one-directional and the largest single confusion.
+                 10 of 20 in the full test, 4 of 9 in real-only.
+                 eat is never mistaken for red.
+  cup -> jump    5 and 2.
+
+bat, pen and milk all begin with a bilabial closure - the lips pressed
+together. The visual gesture is close to identical across them; what
+distinguishes the words is largely in the sound. This is a known
+limitation of visual-only speech recognition rather than a defect in
+this model.
+
+red -> eat has no equally clear explanation. It is the largest error
+in both passes and is reported as an open observation.
+
+Strongest classes: fish (F1 0.9000 real-only), drop and hot (0.8889).
+Weakest: red (0.5882), pen (0.6000), bat (0.6250).
+
+The asymmetry in eat's scores - recall 0.8889, precision 0.6667 - is
+this pattern showing through: eat catches nearly all real eat images
+but also absorbs a large share of red.
+
+
+OUTPUTS
+-------
+  confusion_matrix_full_test.csv / .png
+  confusion_matrix_real_only.csv / .png
+  classification_report_full_test.csv
+  classification_report_real_only.csv
+  training_curves.png
+  y_true / y_pred / y_prob .npy for both passes
+  summary.txt
+
+Raw prediction probabilities are saved so that confidence
+distributions or top-k accuracy can be computed later without
+retraining.
+
+  logs/training_history_log.csv  - per-epoch accuracy and loss
+  logs/class_labels_rebuilt.json - class index to word mapping

@@ -1,0 +1,1 @@
+{"config": "m13_eff_unfreeze20", "seed": 22, "val_acc": 0.7300000190734863, "test_full_acc": 0.5849999785423279, "test_full_loss": 1.2584885358810425, "test_real_acc": 0.644444465637207, "test_real_loss": 1.1094132661819458, "seconds": 81.8}

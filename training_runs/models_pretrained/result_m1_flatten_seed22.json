@@ -1,0 +1,1 @@
+{"config": "m1_flatten", "seed": 22, "total_params": 2885194, "trainable_params": 627210, "final_train_acc": 0.9988889098167419, "final_val_acc": 0.5799999833106995, "best_val_acc": 0.5950000286102295, "best_val_loss": 1.2404987812042236, "best_epoch": 14, "seconds": 52.6}

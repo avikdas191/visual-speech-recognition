@@ -1,0 +1,5 @@
+tensorflow==2.18.0
+keras==3.7.0
+transformers==4.46.3
+accelerate==1.1.1
+numpy==2.0.2

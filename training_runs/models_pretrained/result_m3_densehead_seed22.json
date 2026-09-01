@@ -1,0 +1,1 @@
+{"config": "m3_densehead", "seed": 22, "total_params": 2588490, "trainable_params": 330506, "final_train_acc": 0.6266666650772095, "final_val_acc": 0.48500001430511475, "best_val_acc": 0.49000000953674316, "best_val_loss": 1.4816797971725464, "best_epoch": 15, "seconds": 54.8}

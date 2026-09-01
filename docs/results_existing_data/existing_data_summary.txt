@@ -1,0 +1,7 @@
+Model: model2811_36_21_d130.h5
+Dataset: 7_final_images_130, index-based split
+Test loss: 0.1230
+Test accuracy: 0.9850
+Macro F1: 0.9850
+Errors: bat->red, drop->jump, pen->milk
+Environment: TF 2.18.0, Keras 3.7.0, WSL2

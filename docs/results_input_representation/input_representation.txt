@@ -1,0 +1,179 @@
+Input representation - results
+==============================
+
+Two changes to how the grid images are produced, tested against the
+unmodified dataset. Baseline architecture, five seeds each, validation
+only.
+
+Outcome: neither change produced an effect above noise. Grayscale was
+mildly negative.
+
+
+WHAT WAS TESTED AND WHY
+-----------------------
+ASPECT RATIO
+
+Each lip crop is 112 x 80, aspect ratio 1.40 - wider than tall, as a
+mouth is. Sixty of them tile into a 672 x 800 grid, which the main
+pipeline resizes to 224 x 224.
+
+That resize scales the two axes differently:
+
+  horizontal: 224 / 672 = 0.333
+  vertical:   224 / 800 = 0.280
+
+So each crop becomes 37.3 x 22.4 - aspect 1.67 instead of 1.40, a 19%
+horizontal stretch. Every mouth in the dataset is slightly wider than
+it was recorded.
+
+The variant scales both axes by 0.333, giving 224 x 267 and cells of
+37.3 x 26.7 - the original 1.40 preserved exactly. CNNs do not require
+square input; Conv2D accepts any height and width, so the square
+constraint the original pipeline was designed around was never a real
+one.
+
+GRAYSCALE
+
+Suggested by the project supervisor, and recorded in the original
+project logbook on 28 November as an untested idea. It was dropped
+early in the original work because pretrained ImageNet models require
+three input channels - a reason that no longer applies to a custom CNN.
+
+The argument for it is invariance rather than parameter count. The
+saving is 576 parameters out of 51.4 million, which is nothing. But
+the 60 recording sessions vary by location and lighting - room_lit,
+room_natural, lib_L2, harmer - and colour is where much of that
+variation lives. Removing colour removes a cue the model might be
+using to identify recording sessions rather than to read lips, which
+is the failure the session-based split exposed.
+
+
+HOW THE GRAYSCALE VARIANT WAS BUILT
+-----------------------------------
+Conversion happens at the crop stage (02_frames_cropped), not at the
+grid stage.
+
+This matters. Converting grids would mean augmentation runs on colour
+images whose colour is then discarded - applying RGBShift and then
+throwing away the result. That tests something that does not exist. A
+genuine grayscale pipeline augments grayscale.
+
+Note that dlib's face detection already converts to grayscale
+internally for landmark finding, but takes the crop from the colour
+frame. So re-running the crop stage was unnecessary: converting its
+output is mathematically equivalent, since grayscale conversion and
+resizing are both linear and commute to within one 8-bit level.
+
+Two augmentation types needed changing out of sixteen:
+
+  RGBShift -> RandomGamma(gamma_limit=(60,140))
+      RGBShift perturbs the three colour channels independently and is
+      meaningless on one channel. RandomGamma is the direct analogue -
+      it perturbs intensity response rather than colour response, is
+      stochastic (so it stays in the 8-type stochastic group and the
+      validation/test allocation is unaffected), and simulates the
+      exposure variation that genuinely differs across recording
+      locations.
+
+      Measured strength on a sample frame: RandomGamma 29.55 mean
+      absolute pixel change, against RGBShift's 26.33 in the RGB run.
+      A close match.
+
+  ProcessCroppedImage - adapted, not replaced
+      The RGB version converts BGR to LAB, applies CLAHE to the L
+      channel, and converts back. On a single-channel image the LAB
+      step is unnecessary: CLAHE applies directly. Same operation,
+      shorter path. The blur / bilateral / sharpen / blur chain is
+      unchanged.
+
+The count stays at sixteen, so the augmentation arithmetic - 48
+training sets divided by 16 types, three uses each - is untouched.
+
+The augmentation plan was copied to a separate file rather than
+modified in place, so the substitution is visible in the record:
+
+  augmentation_plan_log.csv       RGB
+  augmentation_plan_gray_log.csv  grayscale, RGBShift replaced
+
+Same sessions, same doubled sessions, same type assignments, same seed
+(101). Only the colour and the two functions differ.
+
+The split assignment was reused unchanged via
+final_image_mapping_log.csv, so image 001.png in Test/bat comes from
+the same recording session in all three datasets.
+
+
+PREDICTIONS, RECORDED BEFORE RUNNING
+------------------------------------
+  Aspect     0 to +3. The stretch is removed, but it is uniform across
+             every image in the dataset, and consistent distortion is
+             learnable. Inconsistent distortion would be the problem.
+             Likely below the measurement margin.
+
+  Grayscale  -2 to +5, genuinely uncertain. The invariance argument
+             says removing colour removes a session cue. Against that,
+             colour may carry real information about the lip-skin
+             boundary, and losing it could weaken edge detection.
+
+Margin: 5 validation points, as in earlier stages.
+
+
+RESULTS
+-------
+  Variant             Params      Mean val   Std     Range        Train
+  v0 RGB square     51,434,058     0.713    0.014  0.700-0.730    1.0000
+  v1 RGB aspect     60,609,098     0.711    0.019  0.685-0.735    1.0000
+  v2 grayscale      51,433,482     0.694    0.029  0.665-0.740    1.0000
+
+Aspect preservation: -0.2 points. Within the predicted range at its
+low end. No measurable effect.
+
+It also costs 9.2 million extra parameters, because 267 rows instead
+of 224 gives a larger Flatten output. More parameters, no gain.
+
+Grayscale: -1.9 points. Inside the predicted range but at the bottom
+of it, and the direction is mildly negative rather than positive.
+
+The supervisor's suggestion and the 28 November logbook entry now have
+an answer: grayscale does not help this model. It does not hurt much
+either - the difference is inside the noise - but the invariance
+argument is not supported by the data.
+
+Grayscale's spread is the widest of the three at 0.029, with one seed
+at 0.740 and another at 0.665. Slightly less stable than RGB.
+
+It does give one small practical benefit: 576 fewer parameters and a
+third of the input data volume. Irrelevant at this scale, but it would
+matter if the input pipeline were a bottleneck.
+
+
+TRAINING ACCURACY
+-----------------
+1.0000 for every variant, every seed.
+
+This now holds across every working configuration in all three stages
+of this phase - seventeen configurations in total. The model memorises
+whatever it is given, regardless of architecture, regularisation,
+colour, or aspect ratio.
+
+
+WHAT THIS ESTABLISHES
+---------------------
+How the input is represented does not limit this model. Neither the
+19% geometric distortion nor the presence of colour changes what it
+learns.
+
+Combined with the two earlier stages: architecture does not limit it,
+training procedure does not limit it, and input representation does
+not limit it. What remains untested is how much distinct information
+the training set contains - the number and composition of augmented
+sets, which is the subject of the following stage.
+
+
+LOGS
+----
+  models_input_representation/input_representation_log.csv   summary
+  models_input_representation/history_*.csv                  curves
+  models_input_representation/result_*.json                  per-run
+
+Datasets are described in rebuild_workspace/README.txt.

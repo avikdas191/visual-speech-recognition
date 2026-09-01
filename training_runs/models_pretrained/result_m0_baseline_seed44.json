@@ -1,0 +1,1 @@
+{"config": "m0_baseline", "seed": 44, "total_params": 2270794, "trainable_params": 12810, "final_train_acc": 0.30666667222976685, "final_val_acc": 0.3149999976158142, "best_val_acc": 0.3149999976158142, "best_val_loss": 1.8962100744247437, "best_epoch": 15, "seconds": 53.1}

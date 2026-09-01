@@ -1,0 +1,1 @@
+{"config": "L2_a6_1e3", "dataset": "d138", "seed": 33, "params": 12903082, "train_samples": 1380, "epochs": 25, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.6850000023841858, "best_val_acc": 0.7250000238418579, "best_val_loss": 0.8749838471412659, "best_epoch": 11, "seconds": 81.8}

@@ -1,0 +1,11 @@
+Model: model_rebuilt_data.h5 (2-conv, 51,434,058 params)
+Dataset: rebuilt, session-based split
+Training: 15 epochs, Adam 1e-4, batch 16, seed 202
+Final training accuracy: 1.0000
+Final validation accuracy: 0.7350
+
+Full test set (20/class, 200 images):
+  loss 0.8225  accuracy 0.7150  macro-F1 0.7130
+
+Real recordings only (9/class, 90 images):
+  loss 0.6907  accuracy 0.7556  macro-F1 0.7537

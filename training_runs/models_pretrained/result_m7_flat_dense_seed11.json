@@ -1,0 +1,1 @@
+{"config": "m7_flat_dense", "seed": 11, "total_params": 18317130, "trainable_params": 16059146, "final_train_acc": 1.0, "final_val_acc": 0.6449999809265137, "best_val_acc": 0.6650000214576721, "best_val_loss": 1.064646601676941, "best_epoch": 10, "seconds": 55.4}

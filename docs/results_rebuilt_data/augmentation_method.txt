@@ -1,0 +1,169 @@
+Augmentation for the rebuilt dataset
+====================================
+
+Input:  02_frames_cropped/   (60 real sessions)
+Output: 03_frames_augmented/ (70 augmented sets, 42,000 frames)
+
+Seed: 101
+The split (seed 4) and the augmentation assignment (seed 101) use
+separate seeds so that neither decision influences the other.
+
+TARGET COUNTS
+-------------
+The rebuilt dataset must match the original in size so that the two
+accuracy figures are comparable. The original held 130 images per
+word, split 90/20/20.
+
+  Split        Real sessions   Augmented needed   Total
+  Train             42               48             90
+  Validation         9               11             20
+  Test               9               11             20
+
+THE CORE RULE
+-------------
+Augmented sets are generated only from sessions belonging to the same
+split. No augmented image in the test set derives from a session used
+in training.
+
+This is the single change that distinguishes the rebuilt dataset from
+the original. In the original, augmented images were drawn from the
+whole pool before splitting, so an augmented copy of a training
+recording could appear in the test set.
+
+HOW ONE AUGMENTED SET IS PRODUCED
+---------------------------------
+One augmented set = one source session + one augmentation type,
+applied to all 60 frames of that session.
+
+The type is constant across the 60 frames. Two types are never
+combined on the same set. This preserves temporal consistency: every
+frame in the sequence is transformed the same way.
+
+For stochastic types, parameters are redrawn per frame - so a
+GaussNoise set has a different noise level on each of its 60 frames,
+and an RGBShift set has a different colour shift on each. The type is
+fixed; the magnitude varies.
+
+SESSIONS USED TWICE
+-------------------
+Each split needs more augmented sets than it has sessions, so some
+sessions contribute two.
+
+  Train:      42 sessions, 48 needed -> 6 used twice
+  Validation:  9 sessions, 11 needed -> 2 used twice
+  Test:        9 sessions, 11 needed -> 2 used twice
+
+Which sessions are doubled follows a fixed rule: half are drawn from
+head angles {normal, up, down} and half from {left, right, unknown}.
+This prevents the additional augmented data from skewing toward
+frontal or lateral head positions.
+
+  Train doubled:      sets 2, 17, 33, 43, 46, 47
+  Validation doubled: sets 15, 27
+  Test doubled:       sets 34, 60
+
+CONSTRAINT: NO REPEATED SESSION+TYPE PAIR
+-----------------------------------------
+A session used twice must receive two different augmentation types.
+
+Without this, a doubled session could receive the same fixed-parameter
+type twice and produce two identical images - a true duplicate in the
+dataset.
+
+CLASSIFICATION OF THE 16 TYPES
+------------------------------
+The 16 augmentation types divide by whether repeated application to
+the same source produces a different result. This was verified
+empirically before generation by applying each type twice to the same
+frame and comparing the outputs.
+
+Stochastic (parameters redrawn each call) - 8 types:
+  Rotate, Translate, Scale, GaussianBlur, GaussNoise, RGBShift,
+  OpticalDistortion, Perspective
+
+Fixed (deterministic output) - 8 types:
+  HorizontalFlip, Brightness, Contrast, Downsample, Sharpen,
+  Equalize, ProcessCroppedImage, TemporalShift
+
+The verification also measured how much each type alters the image
+(mean absolute pixel change on a sample frame):
+
+  Brightness           75.50      Equalize             45.82
+  Contrast             38.93      ProcessCroppedImage  28.14
+  RGBShift             26.33      HorizontalFlip       21.12
+  Translate            20.02      Scale                15.82
+  GaussNoise           10.52      Perspective           8.21
+  Sharpen               7.46      Rotate                4.74
+  OpticalDistortion     2.59      GaussianBlur          2.49
+  Downsample            2.08      TemporalShift         0.00
+
+TemporalShift produces no change at all: the branch that would apply
+it returns the image unchanged, with a comment in the original code
+noting that the required frame-level logic was never implemented.
+
+ALLOCATION OF TYPES
+-------------------
+TRAIN uses all 16 types, three times each (16 x 3 = 48).
+An even distribution was preferred over random selection so that no
+type dominates the training data.
+
+VALIDATION and TEST use the 8 stochastic types once each, plus 3 types
+drawn at random from the fixed group excluding TemporalShift
+(8 + 3 = 11).
+
+Reason: drawing 11 from 16 would leave 5 types absent from each
+evaluation split, with the omissions arbitrary. This rule instead
+guarantees that every augmented evaluation image is a genuinely varied
+transform rather than a deterministic one.
+
+  Validation fixed picks: Contrast, HorizontalFlip, Sharpen
+  Test fixed picks:       Contrast, Downsample, Equalize
+
+TemporalShift is excluded from validation and test because it would
+produce an exact copy of its source. It is retained in training
+because it is present in the original dataset, and removing it would
+introduce a second difference between the two datasets. Three of the
+48 training augmented sets are therefore exact duplicates of their
+source sessions. This is recorded rather than corrected, and is a
+candidate for removal in later work.
+
+CONSEQUENCE TO NOTE
+-------------------
+Because train uses all 16 types and evaluation uses 11, the two have
+different augmentation distributions. The test set contains no
+sharpened, brightened or CLAHE-processed images, for example, while
+training does.
+
+This affects the 20-image test figure only. The primary measurement
+for the rebuilt dataset is the 9 real images per word, which contain
+no augmentation and are unaffected by this difference.
+
+OUTPUT SIZE
+-----------
+All augmented frames are checked against 112x80 after transformation
+and resized only if the transformation altered the dimensions.
+In this run, 0 of 42,000 frames required resizing - no augmentation
+changed the frame size.
+
+DIFFERENCE FROM THE ORIGINAL DATASET
+------------------------------------
+The augmentation code retained in the repository is from a run
+generating 940 augmented sets. The per-type counts for the original
+130-image dataset were never recorded and cannot be recovered. The
+rebuilt dataset therefore has a known type distribution while the
+original does not. This is an uncontrolled difference between the two.
+
+VERSION NOTE
+------------
+This rebuild used albumentations 1.4.21, matching the version current
+at the time of the original project (December 2024). Albumentations
+2.x removed several parameters used here - GaussNoise's var_limit and
+OpticalDistortion's shift_limit among them - so a current version
+would either error or behave differently.
+
+LOGS
+----
+logs/augmentation_plan_log.csv       - planned assignment: every
+  augmented set with source session, source head angle, type, split
+logs/augmentation_generated_log.csv  - actual output: frames written
+  and frames resized per augmented set

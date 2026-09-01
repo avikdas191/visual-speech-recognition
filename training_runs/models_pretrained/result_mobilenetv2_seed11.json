@@ -1,0 +1,1 @@
+{"config": "mobilenetv2", "seed": 11, "total_params": 2270794, "trainable_params": 12810, "final_train_acc": 0.2888889014720917, "final_val_acc": 0.3100000023841858, "best_val_acc": 0.3100000023841858, "best_val_loss": 1.8950448036193848, "best_epoch": 15, "seconds": 54.3}

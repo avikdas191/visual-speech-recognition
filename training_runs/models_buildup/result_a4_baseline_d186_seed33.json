@@ -1,0 +1,1 @@
+{"config": "a4_baseline", "dataset": "d186", "seed": 33, "params": 51434058, "train_samples": 1860, "epochs": 15, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.7049999833106995, "best_val_acc": 0.7450000047683716, "best_val_loss": 0.8824489116668701, "best_epoch": 9, "seconds": 73.1}

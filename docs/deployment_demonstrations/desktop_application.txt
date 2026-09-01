@@ -1,0 +1,205 @@
+Desktop application
+===================
+
+Environment note
+----------------
+All training and dataset generation ran under WSL2 (Ubuntu 22.04) with GPU.
+Paths in those notebooks point at /home/admins/ and reflect that environment.
+Phase 4 onward runs on Windows, CPU only - inference and demo work, no training.
+Paths here point at D:\lipreading_workbench\.
+Both environments verified equivalent: same model, same test set, 0.7150 and
+0.7556 to four decimal places.
+albumentations does not install on Windows Python 3.11, so dataset generation
+is WSL-only. See docs/environment/ for exact versions.
+
+
+1. Why an application was built
+-------------------------------
+The original project demonstrated the system through two separate pieces
+running at once. A local Python process opened an OpenCV window showing the
+camera feed, while a Flask server exposed through ngrok served a web page that
+reported what the system was doing. The two were split because video could not
+be transmitted to the web page reliably over that connection.
+
+This worked, but it was awkward to present. The audience had to look at two
+places at once, and the arrangement only existed because of a network
+limitation rather than because it was a good design.
+
+A desktop application removes the limitation entirely rather than working
+around it. When the camera, the models and the interface all run in one
+process, there is no network boundary for video to cross. The preview and the
+status reporting can sit in the same window because nothing has to be
+transmitted anywhere.
+
+The application is at src/app/lip_reading_app.py. It uses Tkinter, which is
+part of the Python standard library and therefore adds no dependency. The
+visual design follows the original web interface: a dark background, a header
+naming the system, and blue accent text for results.
+
+An alternative was considered and rejected. A webview-based approach would have
+allowed the original HTML and CSS to be reused exactly, but it would have added
+a dependency and a bridge between Python and JavaScript. Since the original
+design is a header and a message area rather than anything structurally
+complex, rebuilding it in Tkinter was the simpler path.
+
+
+2. How the application was built
+--------------------------------
+Development proceeded in four steps, each producing something that could be run
+and checked before the next began.
+
+The first step extracted the pipeline functions from the notebook into
+src/pipeline.py so that the notebook and the application could share one
+implementation. This is described in the accompanying document on the live
+inference pipeline.
+
+The second step built a window containing only the camera preview with hand
+landmarks drawn, and a status line. This was deliberately minimal because the
+main technical risk lay here: OpenCV frames have to reach a Tkinter widget
+without blocking the interface. Three details make this work. The camera is
+opened on a background thread, because the roughly twenty second startup would
+otherwise freeze the window before it could draw anything. Frames are scheduled
+through Tkinter's own event loop rather than read in a loop, because a blocking
+loop would prevent the window from redrawing. A reference to the current image
+is held on the application object, because otherwise Python discards it
+immediately and the preview stays blank.
+
+The third step moved the gesture logic into the window. The functions that
+recognise an open hand and a closed fist are taken from the notebook unchanged,
+as are the recording timer, the frame counter and the three hundred frame
+safety limit. Frames accumulate in memory during recording and are written to
+disk on a background thread afterwards.
+
+The fourth step connected the pipeline and presented the results. After the
+frames are saved, normalisation, cropping, grid assembly, word recognition and
+sentence generation run on a background thread, so that the preview continues
+during the several seconds this takes. Each step reports itself in the status
+line as it happens.
+
+
+3. Interface design
+-------------------
+Two decisions shaped the final layout, and both came from watching the
+application in use rather than from planning.
+
+The first concerns progress messages. An early version presented every step as
+a message in a scrolling list, in the style of a chat interface. This was
+rejected for two reasons. Progress information is useful to a developer and of
+little interest to anyone else, so giving it the most prominent part of the
+window was the wrong emphasis. A scrolling history also accumulated messages
+that no longer mattered, which drew attention away from the current state.
+Progress is now a single line in the footer that is replaced as work proceeds.
+
+Building each message as a new set of widgets also cost measurable performance,
+so replacing the list with a single label improved the frame rate as well.
+
+The second decision concerns results. The recognised word, its confidence and
+the generated sentence appear in a dedicated area below the video, which is
+hidden until there is something to show. There is no history, because a
+previous result has no bearing on the current one. Pressing the button to
+record another word clears the result along with the stored frames, and the
+footer says so before the button is pressed rather than interrupting with a
+dialogue afterwards.
+
+The footer places all text on the left, with a waiting indicator beneath the
+status line, and both buttons on the right. Keeping the text in one column
+means the reader's attention does not have to move across the window.
+
+A session can be repeated without restarting. The button that clears the
+previous recording leaves the camera open, so a second word can be recorded
+immediately rather than waiting again for the camera to initialise.
+
+
+4. Frame rate
+-------------
+The application initially ran at about 17 frames per second, below the 18.3
+measured in the notebook. Since the frame rate determines how much elapsed time
+the sixty captured frames cover, and therefore how closely the recording
+matches the two second training clips, this was worth investigating.
+
+Rather than guess, the loop was instrumented to time its three parts
+separately. This showed roughly 15 milliseconds spent reading from the camera,
+21 milliseconds in MediaPipe hand detection, and 2.6 milliseconds drawing the
+preview, against a budget of 59 milliseconds per frame at 17 frames per second.
+The measurement was necessary because an earlier assumption had been wrong: the
+image passed to MediaPipe had been reduced in size on the theory that detection
+cost scales with resolution, and this produced no improvement at all.
+
+Three changes together raised the rate to about 24 frames per second. The
+preview image is now written into an existing buffer rather than allocated
+fresh for every frame. The next frame is scheduled as an idle callback rather
+than on a one millisecond timer, because the timer's actual resolution is
+coarser than requested and was adding delay. MediaPipe's model complexity was
+reduced to its lighter setting, which lowered detection cost from 21 to 18
+milliseconds. Gesture recognition was tested repeatedly afterwards and remained
+reliable, which is unsurprising given that an open hand and a closed fist are
+coarse shapes.
+
+At 24 frames per second, sixty frames spans about 2.5 seconds, against about
+two seconds for the training clips. This is closer to the training material
+than the notebook manages.
+
+
+5. Lighting affects the frame rate
+----------------------------------
+An unexpected finding emerged during this work. The frame rate depends on the
+lighting in the room.
+
+The timing measurements show why. With the room lights off, reading a frame
+from the camera took between 14 and 17 milliseconds. With them on, the same
+operation took between 9 and 11 milliseconds, and the frame rate rose from 16.7
+to 18.8. The camera sensor uses a longer exposure in low light in order to
+gather enough light, and the call that reads a frame waits for that exposure to
+complete.
+
+This matters because it is a second and entirely separate mechanism by which
+lighting affects the system. The first is straightforward: better lighting
+produces clearer images for the model to work from. The second is that better
+lighting produces a higher frame rate, which changes how much time the sixty
+captured frames represent and therefore how closely the recording matches the
+training material.
+
+Neither mechanism was anticipated. The recollection that the original
+demonstration worked better under good lighting now has two explanations behind
+it rather than one.
+
+
+6. Model files and substitution
+-------------------------------
+The three model files are not bundled with the application. They are expected
+in a models folder beside it, alongside the class label file.
+
+The reasoning is worth recording.. The model is trained on one speaker's lips, so
+there is no general audience who will speak into this application and get good
+results. The realistic audience is a developer reading the repository, and for
+that reader a visible models folder is more useful than a sealed binary,
+because it allows a different model to be substituted without rebuilding
+anything.
+
+There is a limit to that substitution which should be stated plainly. Replacing
+a path in the configuration is sufficient only for a model of the same kind.
+The word recognition path loads a Keras model in HDF5 format, feeds it a
+224x224 three channel image and expects ten class probabilities. The sentence
+generation path loads a T5-compatible directory and calls it with a specific
+prompt format. A different architecture, such as a convolutional network
+combined with a recurrent layer, or a transformer other than T5, would require
+changes to the surrounding code and not only to the path.
+
+The configuration constants are named for what they hold rather than
+generically, for this reason. A generic name would suggest an
+interchangeability that the code does not provide.
+
+
+7. Running the application
+--------------------------
+From the project root, with the environment active:
+
+    cd src\app
+    python lip_reading_app.py
+
+The application loads the word recognition model, then the sentence generation
+model, then opens the camera, reporting each stage as it goes. Once the camera
+is ready, showing an open hand to the camera begins recording and a closed fist
+ends it. The recognised word and the generated sentence appear below the video.
+The button beneath clears the result and allows another word to be recorded
+without reopening the camera.

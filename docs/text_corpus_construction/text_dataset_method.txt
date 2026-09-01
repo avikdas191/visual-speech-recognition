@@ -1,0 +1,162 @@
+Construction of the sentence generation dataset
+===============================================
+
+Environment note
+----------------
+All training and dataset generation ran under WSL2 (Ubuntu 22.04) with GPU.
+Paths in those notebooks point at /home/admins/ and reflect that environment.
+Phase 4 onward runs on Windows, CPU only - inference and demo work, no training.
+Paths here point at D:\lipreading_workbench\.
+Both environments verified equivalent: same model, same test set, 0.7150 and
+0.7556 to four decimal places.
+albumentations does not install on Windows Python 3.11, so dataset generation
+is WSL-only. See docs/environment/ for exact versions.
+
+
+1. Why this document exists
+---------------------------
+The word recognition side of this project has method documents covering how the
+video was recorded, how frames were extracted, how the lip region was cropped,
+how augmentation was applied and how the dataset was assembled. The sentence
+generation side had no equivalent. The dataset that fine-tuned the language
+model was built during the original project and the process was recorded only
+in working notes and in the dissertation, never as documentation a reader of
+this repository could follow.
+
+The model itself was not rebuilt during this reconstruction. It performs
+acceptably, its evaluation was sound, and its recorded figures continue to
+describe it accurately. What was missing was an account of how its training
+data came to exist, and that is what this document supplies.
+
+
+2. What the dataset had to contain
+----------------------------------
+The system recognises one of ten words from silent video and then produces a
+sentence containing that word. The second stage therefore needs training
+examples that pair a single word with a natural sentence using it.
+
+The ten words are bat, cup, drop, eat, fish, hot, jump, milk, pen and red. All
+are single syllable, chosen for the word recognition stage because a
+one-syllable vocabulary keeps the visual task tractable within the scope of a
+master's project.
+
+No existing dataset provides this pairing directly, so it had to be built.
+
+
+3. Sources of the sentences
+---------------------------
+Two published corpora were used as sources of natural conversational English.
+The Cornell Movie-Dialog Corpus supplied dialogue from film scripts, and
+DailyDialog supplied everyday conversational exchanges. Both were chosen
+because they contain ordinary spoken-register sentences rather than formal
+written prose, which suits a system meant to produce something a person might
+plausibly say.
+
+Neither corpus is organised by target word, so sentences containing the ten
+words had to be located within them and extracted.
+
+The corpora alone did not yield enough usable sentences for every word, so
+additional sentences were written by hand. Together these brought the dataset
+to 200 sentences per word, or 2,000 in total.
+
+Neither corpus is redistributed with this project, and neither is the dataset
+derived from them. Only the ten words, the resulting model and this account of
+the process are included here.
+
+
+4. Expanding the dataset through text augmentation
+--------------------------------------------------
+Two hundred sentences per word was too few to fine-tune a language model
+usefully, so the dataset was expanded to 500 sentences per word, giving 5,000
+in total. Five augmentation techniques were used, all of which produce a
+variant of an existing sentence rather than a new one.
+
+Synonym replacement using WordNet through the NLTK library substitutes words
+with closely related alternatives while preserving meaning. The same approach was
+applied through the NLPAug and TextBlob libraries, which also draw on WordNet
+for synonym-based paraphrasing.
+
+Back-translation used the MarianMT translation model. A sentence was translated
+into another language and then back into English, which typically returns a
+sentence with the same meaning but different phrasing.
+
+Contraction and expansion converted forms such as "do not" into "don't" and the
+reverse, which produces a small but genuine variation in surface form.
+
+Because every augmented sentence derives from an original, the augmented
+dataset carries the same limitation as any such expansion: it increases the
+number of examples without increasing the underlying variety of ideas. This is
+visible in the model's evaluation, where diversity scores are low.
+
+
+5. Cleaning and preparation
+---------------------------
+Every sentence was checked to be grammatically correct and to use its target
+word in a contextually sensible way. Duplicate sentences were removed so that
+no word's file contained the same sentence twice.
+
+Cleaning removed unwanted material including stray words and phrases, web
+links, and special characters that carried no meaning. Numbers and characters
+that were part of a sentence's meaning were preserved rather than stripped
+indiscriminately. All text was converted to lower case.
+
+The result was stored as ten plain text files, one per word, each named after
+the word it contains and holding its 500 sentences.
+
+
+6. Preparing the data for the model
+-----------------------------------
+The language model used is T5-small, which treats every task as a conversion
+from one piece of text into another. It therefore needs each training example
+expressed as an input string and a target string.
+
+The ten text files were read and converted into a table with two columns. The
+input column holds the phrase "Generate a sentence for", followed by the word
+and a colon. The target column holds one sentence containing that word. Every
+sentence in every file becomes one row, giving 5,000 rows. This table was saved
+as a single CSV file.
+
+The prompt phrasing matters more than it might appear. A fine-tuned model
+learns to respond to the exact form of input it was trained on, so the same
+phrase must be used at inference time. This is why the deployment code
+constructs its prompt identically rather than using any natural equivalent.
+
+The CSV was loaded through the Hugging Face datasets library and tokenised with
+the T5 tokeniser, converting both columns into fixed-length integer sequences
+of at most 50 tokens with accompanying attention masks. The data was then split
+into training, validation and test sets using stratified sampling, so that each
+of the ten words is represented proportionally in every split.
+
+
+7. Fine-tuning
+--------------
+T5-small was fine-tuned on this dataset with a batch size of 4, a learning rate
+of 5e-5, and five epochs. Validation performance was assessed after each epoch
+and checkpoints were saved. Training minimised cross-entropy loss.
+
+The fine-tuned model is stored at models/t5_fine_tuned_local and is used
+unchanged by both demonstrations in this repository.
+
+
+8. What the dataset explains about the model's behaviour
+--------------------------------------------------------
+The recorded evaluation figures for this model are a perplexity of 8.87, a BLEU
+score of 0.054, a METEOR score of 0.178, and Distinct-1 and Distinct-2 scores
+of 0.012 and 0.016. Fluency is good and semantic alignment is moderate, but
+diversity is poor.
+
+The construction process explains the diversity result directly. The dataset
+contains 5,000 sentences, but they derive from 2,000 originals, and those 2,000
+cover only ten words in a limited range of everyday situations. A model trained
+on this will produce fluent sentences drawn from a narrow set of patterns,
+which is what the low Distinct-N scores measure.
+
+This is visible in use. Concrete nouns such as cup, fish and red produce varied
+and natural sentences, while a word such as hot tends to produce sentences that
+repeat it and make less sense. The dataset simply contains fewer distinct ways
+of using an adjective in an everyday sentence than it does for a physical
+object.
+
+Improving this would require more varied source material rather than more
+augmentation of the same material, since augmentation cannot introduce ideas
+that were not present to begin with.

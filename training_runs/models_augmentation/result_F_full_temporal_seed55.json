@@ -1,0 +1,1 @@
+{"config": "F_full_temporal", "seed": 55, "train_samples": 1380, "val_samples": 250, "final_train_acc": 1.0, "final_val_acc": 0.7360000014305115, "best_val_acc": 0.7480000257492065, "best_val_loss": 0.8078840374946594, "best_epoch": 10, "seconds": 59.6}

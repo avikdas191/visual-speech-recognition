@@ -1,0 +1,1 @@
+{"config": "C_photogeo", "seed": 33, "train_samples": 900, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.6650000214576721, "best_val_acc": 0.7149999737739563, "best_val_loss": 0.9192907810211182, "best_epoch": 12, "seconds": 43.6}

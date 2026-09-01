@@ -1,0 +1,92 @@
+Dataset diagnostics
+===================
+
+Checks run on the rebuilt dataset before architecture work began.
+No training involved; these are measurements of the data itself.
+
+
+FRAME PADDING
+-------------
+Videos shorter than 60 frames are extended by repeating the final
+frame. Extent across the 600 source videos:
+
+  padded at all:        123
+  padded >  5 frames:    46
+  padded > 10 frames:    15
+  padded > 15 frames:     4
+
+So roughly 92% of videos are padded by 5 frames or fewer, which is
+negligible. The problem is concentrated rather than widespread.
+
+Worst affected sessions, by total padded frames across their 10 videos:
+
+  set_28    102 frames    worst single video: 20
+  set_20     97                               20
+  set_19     53                               15
+  set_34     51                               14
+
+The extreme cases are set_28/bat and set_20/eat, both from 40-frame
+source videos. In those grids, 20 of the 60 cells are the same
+repeated still image - a third of the input is one frozen frame, and
+whatever articulation occurred after frame 40 was never recorded.
+
+
+WHERE THE AFFECTED SESSIONS LANDED
+----------------------------------
+  set_19  train
+  set_20  train
+  set_28  train
+  set_34  TEST
+
+Three of the four worst sessions are in training, where the effect is
+dilution across 42 sessions and is tolerable.
+
+set_34 is in the test split. With only 9 test sessions, this is 11% of
+the primary measurement carrying moderately degraded input, and it may
+slightly depress the reported accuracy.
+
+The split was NOT redrawn in response to this. The assignment was made
+by a documented rule with a fixed seed before any data-quality
+inspection, and moving a session out of test because it looks
+unfavourable would be selection after the fact. The figure stands as
+measured, with this characteristic recorded.
+
+Follow-up available: once a better model exists, compare per-session
+accuracy across the 9 test sessions. If set_34 scores markedly below
+the other eight, that supports padding as a contributing factor. If
+not, the concern was overstated. Either way it is an observation drawn
+from the data rather than an adjustment made to it.
+
+
+CROP SCALE - EXAMINED AND SET ASIDE
+-----------------------------------
+The cropping code handles two cases differently. When the mouth
+bounding box is smaller than 112x80, padding is added and the mouth
+keeps its natural size. When the box is larger, no padding is added
+and the crop is resized down, so the mouth fills the frame.
+
+This raised a concern that apparent mouth scale might vary with lip
+opening, since open-mouth frames produce larger bounding boxes.
+
+Visual inspection of cropped output across sets 5, 7, 9, 45 and 50
+found consistent framing with no visible scale variation between
+open and closed positions. The likely explanation is that a 112x80
+window is generous relative to a mouth at this recording framing, so
+the resize path rarely triggers.
+
+Recorded as examined and not pursued. If certainty is wanted later,
+logging the raw bounding box dimensions during cropping would settle
+it directly.
+
+
+AUGMENTATION VOLUME - DEFERRED
+------------------------------
+Whether 70 augmented sets is the right number cannot be tested against
+the current model. That model reaches 1.0000 training accuracy by
+epoch 9 with roughly 57,000 parameters per training sample - it
+memorises whatever it is given. Adding data would produce no
+measurable change, and the correct conclusion would be that the model,
+not the data volume, is the constraint.
+
+The question becomes answerable once parameter count is brought in
+line with dataset size. Deferred until after architecture work.

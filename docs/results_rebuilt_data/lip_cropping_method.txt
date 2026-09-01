@@ -1,0 +1,85 @@
+Lip region extraction (dlib)
+============================
+
+Input:  01_frames_original/  (36,000 frames)
+Output: 02_frames_cropped/   (36,000 crops at 112x80)
+
+METHOD
+------
+For each frame:
+  1. Convert to greyscale
+  2. Detect faces with dlib.get_frontal_face_detector()
+  3. Apply the 68-point landmark predictor to the first detected face
+  4. Take landmarks 48-68 (the mouth contour)
+  5. Compute the bounding rectangle of those points
+  6. Pad the rectangle symmetrically toward 112x80, clamped so the
+     crop cannot extend past the frame edge
+  7. Resize the result to exactly 112x80
+
+Predictor file: shape_predictor_68_face_landmarks.dat
+
+WHY PADDING RATHER THAN A FIXED BOX
+-----------------------------------
+The mouth bounding rectangle changes size continuously during speech -
+an open mouth produces a taller box than a closed one. Cropping the
+raw rectangle would yield frames of varying dimensions, and resizing
+those to a common size would rescale the mouth differently from frame
+to frame, destroying the very signal the model needs.
+
+Padding toward a fixed target instead keeps the mouth at a consistent
+scale across the sequence, with the surrounding region filling the
+remainder.
+
+SOURCE OF THIS GEOMETRY
+-----------------------
+Reproduced from crop_lip.py in the build-3 directory of the original
+codebase. That script is the cropping stage referenced by
+initial_data_ready.ipynb, between frame extraction and augmentation.
+
+Limitation: the original intermediate cropped frames were not
+retained, so the output of this rebuild could not be compared directly
+against the original crops. The geometry is reproduced from the
+script line by line, and the resulting crops were inspected visually,
+but exact equivalence to the original dataset is not verifiable.
+
+DETECTION FAILURE HANDLING
+--------------------------
+Rule adopted before the run: if detection fails on a frame, fill it
+from the nearest successful frame rather than skipping it.
+
+  - Interior gap: the first half of the gap is filled from the last
+    good frame before it, the second half from the first good frame
+    after it. Odd-length gaps favour the earlier frame.
+  - Leading gap: filled forward from the first good frame.
+  - Trailing gap: filled backward from the last good frame.
+  - Whole video fails: reported as an error, not silently skipped.
+
+Reason for splitting interior gaps rather than filling from one side:
+copying a single frame across a long gap freezes the mouth at one
+position and then jumps, producing a visible discontinuity mid-word.
+Filling from the nearer side keeps each substituted frame adjacent to
+one it resembles.
+
+The original crop_lip.py skipped undetected frames entirely. A word
+folder with fewer than 60 frames is then rejected later by the grid
+assembly step, which requires exactly 60 - so a single detection
+failure would silently drop that word from the dataset. The fill rule
+was adopted to make such cases visible and recoverable rather than
+silent.
+
+RESULT
+------
+600 of 600 videos: 60 of 60 frames detected.
+Zero detection failures across all 36,000 frames.
+The fill logic was therefore never invoked.
+
+This reflects work done during the original project, where sessions
+with poor detection were identified and re-recorded until detection
+succeeded.
+
+VERSION NOTE
+------------
+This rebuild used dlib 20.0.1. The original project used dlib 19.24.2.
+The landmark predictor file is identical. Detection behaviour is
+stable across these versions, but the difference is recorded as an
+uncontrolled variable.

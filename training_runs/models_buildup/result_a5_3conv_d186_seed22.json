@@ -1,0 +1,1 @@
+{"config": "a5_3conv", "dataset": "d186", "seed": 22, "params": 25817802, "train_samples": 1860, "epochs": 15, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.6800000071525574, "best_val_acc": 0.7350000143051147, "best_val_loss": 0.9722087979316711, "best_epoch": 7, "seconds": 71.5}

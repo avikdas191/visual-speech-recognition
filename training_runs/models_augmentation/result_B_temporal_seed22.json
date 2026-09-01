@@ -1,0 +1,1 @@
+{"config": "B_temporal", "seed": 22, "train_samples": 900, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.7200000286102295, "best_val_acc": 0.7400000095367432, "best_val_loss": 0.8742979168891907, "best_epoch": 13, "seconds": 44.2}

@@ -1,0 +1,1 @@
+{"config": "A_original", "seed": 11, "train_samples": 900, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.675000011920929, "best_val_acc": 0.7250000238418579, "best_val_loss": 0.9408389329910278, "best_epoch": 11, "seconds": 44.5}

@@ -1,0 +1,265 @@
+Augmentation experiments - results
+==================================
+
+Ten dataset configurations testing whether augmentation composition or
+augmentation volume affects generalisation. Baseline architecture, five
+seeds each, validation only.
+
+Outcome: no configuration is reliably better than the original.
+Several intermediate findings are worth recording, including one
+apparent effect that a later configuration exposed as noise.
+
+
+WHAT WAS BEING TESTED
+---------------------
+Every earlier stage varied how the data is processed - architecture,
+regularisation, colour, geometry. None changed how much distinct
+material the training set contains.
+
+Two hypotheses remained:
+
+  COMPOSITION  The 16 augmentation types were chosen during the
+               original project without measurement. Four of them
+               barely alter the image. Replacing them with types
+               targeting variation the dataset actually contains
+               might help.
+
+  VOLUME       The original dataset holds 48 augmented training sets.
+               More augmented sets means more training images from
+               the same 42 recording sessions.
+
+
+MEASURING THE CANDIDATES FIRST
+------------------------------
+Before selecting replacements, every candidate was measured the same
+way the original 16 were: applied to a reference frame, mean absolute
+pixel change recorded, and applied twice to establish whether it is
+stochastic.
+
+New frame-level candidates:
+
+  RandomShadow        29.37
+  CLAHEVarying        22.53
+  GridDistortion      10.52
+  ElasticTransform     4.27
+  CoarseDropout        3.93
+  MotionBlur           2.90
+  ISONoise             1.43
+
+New sequence-level candidates, which transform all 60 frames together:
+
+                    mean change   frames altered (of 60)
+  RateVariation         6.94              58
+  SmoothDrift           4.04              46
+  DropRefill            3.67              55
+  FrameMorph            2.62              58
+
+RateVariation was dropped: the measurement showed it deterministic -
+the implementation contained no random draw - and it overlapped with
+FrameMorph and DropRefill.
+
+MotionBlur and ISONoise were dropped on the measurement. Both had been
+proposed as improvements on GaussianBlur (2.49) and GaussNoise (10.52).
+MotionBlur is barely different from what it would replace, and ISONoise
+is seven times weaker than GaussNoise. The theoretical case for both
+collapsed once measured.
+
+RandomShadow had been assessed beforehand as weak. It measured 29.37,
+stronger than most of the original 16. That assessment was wrong.
+
+
+THE FOUR WEAKEST ORIGINAL TYPES
+-------------------------------
+  TemporalShift       0.00   a no-op; the branch returns the input
+  OpticalDistortion   2.59   simulates lens distortion, but the camera
+                             never changes between recordings
+  GaussianBlur        2.49   focus loss; kernel 7-15 on an 80px image
+                             should be dramatic, so the low figure
+                             suggests it is barely applying
+  Downsample          2.08   resolution loss, but all recordings are
+                             720x1280
+
+These four were replaced in both composition variants.
+
+
+CONFIGURATIONS
+--------------
+  Group  Augmentation set        Train/word  Val & test/word
+    A    original 16                 90            20
+    B    temporal swaps              90            20
+    C    photogeo swaps              90            20
+    D    original 16                138            20
+    E    original 16                138            25
+    F    temporal swaps             138            25
+    G    photogeo swaps             138            25
+    H    original 16                186            20
+    I    original 16                234            20
+    J    original 16                330            20
+
+  B adds FrameMorph, DropRefill, SmoothDrift, CoarseDropout
+  C adds RandomShadow, CLAHEVarying, GridDistortion, ElasticTransform
+
+E, F and G evaluate on 25 images per class rather than 20. With 16
+augmentation types and only 11 augmented evaluation slots, the standard
+design cannot include every type in validation and test - five are
+always absent. Raising to 16 augmented slots gives one of each. This
+makes the evaluation more representative of the training distribution,
+but the resulting figures are not comparable to the other groups.
+
+
+RESULTS - 20 IMAGES PER CLASS
+-----------------------------
+  Config      Train n   Mean val   Std     Range
+  A_original     900     0.718    0.017  0.700-0.735
+  B_temporal     900     0.716    0.035  0.660-0.745
+  C_photogeo     900     0.705    0.015  0.690-0.725
+  D_volume      1380     0.758    0.016  0.735-0.775
+  H_vol144      1860     0.733    0.013  0.715-0.745
+  I_vol192      2340     0.757    0.018  0.735-0.770
+  J_vol288      3300     0.744    0.014  0.725-0.760
+
+
+RESULTS - 25 IMAGES PER CLASS
+-----------------------------
+  Config            Train n   Mean val   Std     Range
+  E_full             1380     0.714    0.006  0.708-0.724
+  F_full_temporal    1380     0.736    0.019  0.720-0.764
+  G_full_photogeo    1380     0.690    0.007  0.680-0.696
+
+
+COMPOSITION: NO EFFECT AT EQUAL VOLUME
+--------------------------------------
+B (0.716) and C (0.705) against A (0.718). Neither swap of four types
+changed anything measurable.
+
+This was predicted: replacing 4 of 16 types alters 25% of the
+augmentation but only about 6% of the training images, and the
+expected effect was below what 200 validation images can resolve.
+
+
+COMPOSITION: A DIFFERENCE AT HIGHER VOLUME
+------------------------------------------
+Among E, F and G, temporal augmentation clearly beat photometric:
+
+  F (temporal)   0.736   range 0.720-0.764
+  G (photogeo)   0.690   range 0.680-0.696
+
+4.6 points apart with no overlap across five seeds.
+
+This is the reverse of what the magnitude measurement predicted. C's
+replacements measured 29.37, 22.53, 10.52 and 4.27; B's measured 2.62,
+3.67, 4.04 and 3.93. The weaker set performed better.
+
+The finding: mean pixel change does not predict usefulness. A large
+uniform photometric shift changes many pixels but teaches the model
+little. A small change applied across a sequence in a temporally
+structured way - where the alteration at frame 30 relates to the mouth
+position at frame 31 - appears to carry more information.
+
+This should be held loosely. B (temporal at 90 images per word) showed
+no advantage over A, while F (temporal at 138) beat E clearly. Why
+temporal augmentation would help only at the higher volume is not
+explained, and at these sample sizes the F-vs-G gap could still be a
+favourable draw.
+
+
+VOLUME: AN APPARENT EFFECT THAT DID NOT SURVIVE
+-----------------------------------------------
+D at 138 images per word gave 0.758 against A's 0.718 - four points,
+with ranges that did not overlap at all. D's worst seed equalled A's
+best. Across every configuration tested in this phase, that had not
+happened before, and it was recorded at the time as the first genuine
+movement.
+
+The ladder was then extended to test whether more helps further:
+
+  A     90 images/word    0.718
+  D    138                0.758
+  H    186                0.733
+  I    234                0.757
+  J    330                0.744
+
+Not monotonic. If volume drove the result, H would sit between D and I.
+It sits below both, closer to A.
+
+All four volume configurations fall between 0.733 and 0.758, with
+overlapping ranges. The most likely reading is that D's separation from
+A was a favourable draw, and H is the counter-example that exposes it.
+
+There may be a weak positive tendency - all four exceed A - but the
+ordering is wrong for a volume effect and the spread within the group
+is as large as the gap from A.
+
+This is worth recording as a methodological point as much as a result.
+Five seeds with non-overlapping ranges felt like strong evidence at the
+time. It was not sufficient. Only running the same design at a
+different volume revealed the problem.
+
+
+TRAINING ACCURACY
+-----------------
+1.0000 in every configuration, including J at 3,300 training images -
+3.7 times A's volume.
+
+This has now held across every working configuration in all four stages
+of this phase, more than forty in total.
+
+It is the clearest statement of the underlying limitation. Augmented
+copies of 42 recording sessions do not add information regardless of
+how many are produced. The model is not short of images; it is short of
+recordings.
+
+
+WHICH DATASET WAS KEPT
+----------------------
+A, the original.
+
+Not because it performed best - nothing performed measurably best - but
+because the Phase 2 test figures (71.50% full, 75.56% real-only) were
+measured on it, and switching would require spending a test-set
+evaluation to obtain a comparable number for a change the evidence does
+not support.
+
+D and I scored highest, but H shares D's design at higher volume and
+scores 0.733. Selecting the top of that band would be selecting on
+noise.
+
+Worth noting for any future work: the full-coverage design used in E, F
+and G is methodologically better than the standard one, independent of
+its accuracy. A test set that excludes five of sixteen augmentation
+types is evaluating on a narrower distribution than the model was
+trained on. F specifically - full coverage with temporal augmentation -
+has the best combination of design rationale and measured performance
+of anything tested here, and would be the configuration to revisit if
+this work continues.
+
+
+AN IMPLEMENTATION NOTE
+----------------------
+Two assignment algorithms are used to build the augmentation plans.
+
+The original method shuffles the type list and retries until no session
+receives the same type twice. This works up to six uses per type.
+
+At nine or more uses - groups H, I and J - most sessions must receive
+seven or more distinct types from sixteen, and the probability that a
+random shuffle satisfies every session at once becomes negligible. Five
+hundred attempts all failed.
+
+The higher-volume plans therefore use a constructive method that deals
+types out in rounds, one full pass of the type pool per round, choosing
+the session with the most remaining slots that has not yet received
+that type.
+
+The dispatch is on uses per type, six or fewer taking the original
+path, so the earlier plans regenerate identically.
+
+
+LOGS
+----
+  logs/augmentation_candidate_measurement_log.csv
+  logs/augmentation_plan_*_log.csv          nine plans
+  logs/augmentation_generated_*_log.csv
+  logs/final_image_mapping_*_log.csv
+  models_augmentation/augmentation_comparison_log.csv
+  models_augmentation/history_*.csv

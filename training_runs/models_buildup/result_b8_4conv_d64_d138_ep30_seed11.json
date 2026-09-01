@@ -1,0 +1,1 @@
+{"config": "b8_4conv_d64", "dataset": "d138", "seed": 11, "params": 3600394, "train_samples": 1380, "epochs": 30, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.6949999928474426, "best_val_acc": 0.7300000190734863, "best_val_loss": 0.9862724542617798, "best_epoch": 7, "seconds": 100.0}

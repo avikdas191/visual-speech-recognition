@@ -1,0 +1,133 @@
+Web application
+===============
+
+Environment note
+----------------
+All training and dataset generation ran under WSL2 (Ubuntu 22.04) with GPU.
+Paths in those notebooks point at /home/admins/ and reflect that environment.
+Phase 4 onward runs on Windows, CPU only - inference and demo work, no training.
+Paths here point at D:\lipreading_workbench\.
+Both environments verified equivalent: same model, same test set, 0.7150 and
+0.7556 to four decimal places.
+albumentations does not install on Windows Python 3.11, so dataset generation
+is WSL-only. See docs/environment/ for exact versions.
+
+
+1. Why this exists alongside the desktop application
+----------------------------------------------------
+The original project was demonstrated through two pieces running at once. A
+local process opened an OpenCV window showing the camera feed, while a web page
+served separately reported what the system was doing at each step. The two were
+kept apart because video could not be transmitted to the page reliably.
+
+The desktop application replaces that arrangement with a single window and is
+the better way to show the system to someone who simply wants to use it. This
+document describes a second demonstration that deliberately keeps the original
+two-window form.
+
+Reproducing a project means showing what was actually built, not only what it
+became. If the original presentation no longer runs, a reader has no way to see
+what the desktop application improved upon, and the improvement becomes
+invisible. Keeping both makes the comparison available rather than asserted.
+
+The two also suit different readers. The web page keeps every status message
+from a session visible at once, which is what someone trying to understand how
+the system works wants to see. The desktop application replaces each message
+with the next and shows only the final result, which is what someone using the
+system wants. Neither is better in general.
+
+Implementation: src/app/lip_reading_web_app.py, with the page at
+src/app/templates/index.html and its image at src/app/static/favicon.ico.
+
+
+2. What was kept and what was changed
+-------------------------------------
+The original web application is preserved unchanged in src/archive. It was used
+here only as a reference for how the server was arranged and how the page
+polled it. None of its processing logic was carried across, because that logic
+was rebuilt and corrected earlier and now lives in src/pipeline.py, which this
+demonstration imports. The desktop application imports the same module, so the
+two run identical processing by construction.
+
+The page itself follows the original closely. It polls a status endpoint once
+per second, clears its message area and rebuilds it from the response, which is
+what produced the original conversational appearance. That behaviour is
+deliberately unchanged, because it is the thing being shown.
+
+Four changes were made.
+
+The tunnelling service was removed. The original exposed the local server to
+the public internet through a tunnel, even though the browser was running on
+the same machine as the server. This served no purpose and was the genuine
+defect in the original arrangement. Flask serves the page on the local
+interface directly, so the tunnel was deleted rather than replaced.
+
+The status list is now guarded by a lock. The web server answers requests on one
+thread while the camera loop runs on another, and a list being appended to while
+it is read can fail. The original had no such protection.
+
+The avatar image is served locally rather than fetched from an image hosting
+site, so the page no longer needs an internet connection to display correctly.
+
+The frame rate improvements found while building the desktop application were
+applied here as well, so both demonstrations behave the same way.
+
+
+3. How a session runs
+---------------------
+Both models load first, then the camera opens, and each stage reports itself to
+the page as it happens. Once the camera is ready, showing an open hand begins
+recording and a closed fist ends it. The captured frames are then normalised,
+cropped, assembled into a grid, classified and used to generate a sentence,
+with every step reported.
+
+The processing runs on a separate thread from the camera loop. Without this the
+preview would freeze on its last frame for the several seconds the pipeline
+takes, which looked like the application had stopped responding.
+
+The recognised word and the generated sentence are shown differently from the
+progress messages: in green, and aligned to the opposite side of the window.
+These are the only two lines a reader actually needs, so distinguishing them
+from the running commentary matters.
+
+A session can be repeated without restarting. The camera stays open between
+recordings, so a second word can be recorded immediately rather than waiting
+again for the camera to initialise. This was worth adding because the original
+had no such delay to begin with: it opened the camera quickly, so restarting
+the whole demonstration was tolerable. The current version takes about twenty
+seconds to open the camera, which makes restarting for every word unreasonable.
+
+Pressing the button clears the message history before the next session begins.
+The alternative, keeping every session's messages, was considered and rejected.
+The value of this page is that a full trail from camera setup to generated
+sentence is visible at once, and several sessions accumulated together would
+obscure exactly that. A message before the button explains that pressing it
+clears what is above.
+
+
+4. Frame rate
+-------------
+This demonstration runs at about 19.9 frames per second, against about 24 for
+the desktop application, both measured over the recording itself.
+
+The difference is the web server. It answers a status request every second on
+one thread while the camera loop runs on another, and the two contend for the
+interpreter. The desktop application has no such contention.
+
+This is worth stating rather than hiding, because it is a real cost of the
+two-part arrangement and one more respect in which the single-window
+application is the better design. It is not a large cost: both figures are well
+above what the original managed, and both are far enough above the rate at
+which gestures and speech are captured usefully.
+
+
+5. Running it
+-------------
+From the project root, with the environment active:
+
+    cd src\app
+    python lip_reading_web_app.py
+
+Then open the address printed in the terminal in a browser. The camera window
+appears a few seconds later, so it is worth opening the page first in order to
+watch the startup messages arrive.

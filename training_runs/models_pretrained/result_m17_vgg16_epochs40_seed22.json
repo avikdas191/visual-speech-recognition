@@ -1,0 +1,1 @@
+{"config": "m17_vgg16_epochs40", "seed": 22, "total_params": 21140042, "trainable_params": 6425354, "epochs_run": 40, "train_samples": 900, "final_train_acc": 0.9811111092567444, "final_val_acc": 0.6499999761581421, "best_val_acc": 0.6899999976158142, "best_val_loss": 0.9851162433624268, "best_epoch": 39, "seconds": 261.6}

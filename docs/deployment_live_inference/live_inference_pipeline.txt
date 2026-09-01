@@ -1,0 +1,381 @@
+Live inference pipeline - webcam capture to CNN word prediction
+===============================================================
+
+Environment note
+----------------
+All training and dataset generation ran under WSL2 (Ubuntu 22.04) with GPU.
+Paths in those notebooks point at /home/admins/ and reflect that environment.
+Phase 4 onward runs on Windows, CPU only - inference and demo work, no training.
+Paths here point at D:\lipreading_workbench\.
+Both environments verified equivalent: same model, same test set, 0.7150 and
+0.7556 to four decimal places.
+albumentations does not install on Windows Python 3.11, so dataset generation
+is WSL-only. See docs/environment/ for exact versions.
+
+
+1. Scope
+--------
+This stage covers the complete path from webcam to generated sentence:
+
+  hand gesture (MediaPipe) starts and stops capture
+    -> frames held in memory, written to runtime/extracted_frames/
+    -> normalised to exactly 60 frames
+    -> lip region cropped per frame with dlib 68-point landmarks (48-68),
+       output 112x80, written to runtime/cropped_frames/
+    -> 60 crops tiled into one 10-row x 6-column grid (672x800)
+    -> resized to 224x224, both written to runtime/grids/
+    -> 2D CNN classifies into one of 10 words
+    -> fine-tuned T5-small generates a sentence containing that word
+
+Implementation: src/app/lip_reading_inference_demo.ipynb, with the pipeline
+functions themselves in src/pipeline.py.
+Models: models/model_rebuilt_data.h5 (51,434,058 parameters, input 224x224x3),
+models/t5_fine_tuned_local/, models/shape_predictor_68_face_landmarks.dat
+Labels: models/class_labels_cl10.json
+Classes: bat, cup, drop, eat, fish, hot, jump, milk, pen, red
+
+
+2. No intermediate video file
+-----------------------------
+The original 2024 deployment path wrote an .mp4 with cv2.VideoWriter and then
+re-read it to extract frames. That is not done here for two reasons.
+
+The mp4v codec failed on Windows OpenCV, and calling video_writer.write()
+inside the capture loop was the main source of capture lag.
+
+The pipeline only ever needed 60 frames, not a video container. Frames now
+accumulate in a Python list during capture and are written to
+runtime/extracted_frames/ after the preview window closes.
+
+runtime/ is cleared at the start of every capture by clear_runtime(). This
+also removes the stale-frame hazard present in the original web_app path,
+where cropped_frames was never emptied between runs and a short recording
+could leave old crops in place, producing a grid assembled from two different
+recordings.
+
+
+3. Camera setup
+---------------
+cv2.CAP_DSHOW opens instantly but caps throughput at about 10 fps. Bare
+cv2.VideoCapture(0) and cv2.CAP_MSMF both run at full speed but take roughly 21
+seconds to open.
+
+The startup cost is not avoidable, so it is relocated rather than removed.
+Camera opening lives in its own notebook cell, run before the demo begins, and
+the capture cell reuses the already-open handle. Measured result: camera
+initialisation 22.09s in its own cell, MediaPipe initialisation 0.01s, time to
+first preview 0.15s. MSMF was not faster than the bare constructor; the
+improvement came from moving the open into a separate cell rather than from the
+backend choice.
+
+cv2.waitKey(10) was reduced to cv2.waitKey(1), which gave a real throughput
+improvement.
+
+The capture resolution must be 1920x1080, for the reasons set out in section 4.
+
+Throughput in the notebook measures 18.3 fps at 1080p against 20.8 fps at 720p,
+both stable across repeated runs. The camera reports 30.0 fps; the gap is the
+per-frame cost of MediaPipe hand detection, colour conversion and preview
+rendering. At 18.3 fps, 60 frames spans about 3.3 seconds, whereas the original
+training clips were 30 fps and 60 frames spanned about 2 seconds. The desktop
+application described in the accompanying document reaches about 24 fps through
+changes that do not apply to a notebook, where 60 frames spans about 2.5
+seconds. Both figures are recorded differences from the training material
+rather than something corrected for.
+
+
+4. Capture resolution and mouth size - the main finding of this stage
+--------------------------------------------------------------------
+The lip crop takes the dlib mouth bounding box and pads it outward to reach a
+fixed 112x80 pixels, then resizes. The padding is a fixed pixel count, not a
+proportion. How much surrounding face ends up inside the crop therefore
+depends entirely on how many pixels wide the mouth is in the source frame.
+
+Measured mouth bounding boxes (dlib landmarks 48-68):
+
+  Source                          	mean width    mean height
+  original phone video, 720x1280     133.4          69.0
+  webcam 1280x720                     67.3          31.6
+  webcam 1920x1080                   108.7          51.7
+
+The figures for the original recordings are from all 600 source videos, 5
+frames sampled per video, 3000 frames measured, zero detection failures. The
+webcam figures are from single 60-frame captures at ordinary seated distance.
+
+At 720p the mouth is roughly half the target width, so padding adds about 22
+pixels per side horizontally and 24 vertically. That padding is cheek, nose
+and chin, and the resulting crops do not resemble the training data.
+
+At 1080p the mouth is just under the 112 target width, so horizontal padding
+is near zero and vertical padding is small. The crops match the training data
+in composition.
+
+The general rule: crop quality depends only on the mouth's size in pixels.
+Camera distance and capture resolution trade off directly against each other,
+because the crop code cannot distinguish sitting closer from capturing at
+higher resolution. Halving the distance and doubling the linear resolution
+have the same effect. A mouth width in roughly the 100 to 135 pixel range
+produces training-like crops.
+
+Consequence: no scale-normalisation code was added. Setting the webcam to
+1080p is sufficient, and the preprocessing therefore remains identical to
+src/data_prep/generate_rebuilt_dataset.ipynb.
+
+A per-frame scale factor was considered and rejected. Mouth height varies with
+mouth opening, which is the signal the model reads; normalising each frame to
+a constant mouth size would suppress the opening and closing across the 60
+frames. If scale normalisation is ever needed, it must use a single factor per
+recording, derived from median mouth width, never per frame.
+
+
+5. Frame count normalisation
+----------------------------
+Utterance length varies. A one-syllable word can finish in well under two
+seconds, and the original source videos ranged roughly 1.4 to 2.5 seconds, 
+so raw extraction gave more or fewer than 60 frames. The rule is unchanged 
+from generate_rebuilt_dataset.ipynb:
+
+  fewer than 60  - repeat the final frame until 60 is reached
+  more than 60   - discard 80 percent of the excess from the end and the
+                   remainder from the start
+
+The lips are closed at both ends of a recording and the middle carries the
+signal, which is why trimming is weighted toward the end.
+
+Trimming and padding operate on the in-memory frame list before anything is
+written, so files on disk are always numbered 01 to 60.
+
+Observed across the ten test captures in section 6: 52 to 63 source frames,
+padding in seven cases, trimming in two, exact in one.
+
+
+6. Lip cropping and detection failures
+--------------------------------------
+Cropping is ported unchanged from generate_rebuilt_dataset.ipynb: dlib frontal
+face detector, 68-point predictor, landmarks 48 to 68, bounding rectangle,
+padding to 112x80, resize.
+
+The fill_gaps routine is retained and is essential. dlib does not detect every
+frame reliably. In the original project this was handled by reshooting until a 
+clean take was obtained, but a live demo has no such luxury. When detection 
+fails on a frame, the crop is filled from the nearest successful neighbour: 
+a leading gap fills forward, a trailing gap fills backward, and an interior 
+gap is split between the frames on either side. Sixty frames in always 
+produces sixty crops out.
+
+Two changes from the training version, both because this processes one
+recording in-process rather than 600 in a process pool: the detector and
+predictor are loaded once at module level rather than through a worker
+initialiser, and the predictor path points at models/ in this codebase.
+
+Across the ten test captures, dlib detected all 60 frames in every run and
+fill_gaps was never invoked.
+
+
+7. Grid assembly and prediction
+-------------------------------
+Sixty 112x80 crops are tiled into a 10-row by 6-column grid, giving 672x800,
+placed by index with row = idx // 6 and column = idx % 6. The grid is resized
+to 224x224 with PIL LANCZOS. Both are written to runtime/grids/.
+
+The 6-column by 10-row layout is the closest-to-square arrangement for 60 cells
+of 112x80 and is the original design decision. It converts video classification
+into image classification so that an ordinary 2D CNN can be used.
+
+The resized grid is read back with PIL, converted to RGB, divided by 255 and
+passed to the model. This matches the preprocessing the training generator
+applied.
+
+Verified at load: 51,434,058 parameters and input shape (None, 224, 224, 3),
+both matching the Phase 2 figures for this model.
+
+
+8. Live capture observations
+----------------------------
+Ten single-take captures, one per word, recorded in an ordinary daytime room
+on the darker side, seated at normal desk distance.
+
+  spoken   predicted   confidence   second place
+  bat      milk        0.4880       fish   0.3295
+  cup      cup         0.3985       jump   0.2318
+  drop     jump        0.4859       drop   0.2975
+  eat      eat         0.5313       fish   0.3158
+  fish     fish        0.9626       milk   0.0240
+  hot      jump        0.4399       hot    0.4010
+  jump     jump        0.5329       eat    0.1588
+  milk     milk        0.7106       pen    0.1138
+  pen      pen         0.5178       drop   0.1643
+  red      eat         0.6100       jump   0.1180
+
+Six of ten matched. Of the four that did not, drop and hot had the spoken word
+in second place, hot within 0.04 of the top. Red had it third. Bat is the only
+case where the spoken word was absent from the top three.
+
+These are NOT an accuracy measurement and must not be compared with the 71.50
+percent full-test or 75.56 percent real-only figures. Those come from held-out
+sets of 200 and 90 images under a session-based split. This is ten single
+takes by a speaker who knows in advance what he is saying, in one lighting
+condition, on different hardware, with no repetition. It demonstrates that the
+chain runs end to end and produces plausible output. Nothing more should be
+read into it.
+
+Two patterns are noted without being claimed as findings. Jump was predicted
+three times, twice incorrectly. Confidence does not separate correct from
+incorrect predictions: the highest incorrect was 0.6100 and the lowest correct
+0.3985, so no usable threshold exists.
+
+What these runs do rule out is a preprocessing problem. Mouth widths ranged
+104.6 to 116.3 across all ten, inside the range established in section 4, and
+dlib detected every frame in every run with no gap filling anywhere.
+
+
+9. Known train-inference differences
+------------------------------------
+The following differences between training conditions and live capture are
+recorded here rather than corrected for.
+
+Camera hardware- The training data came from a phone camera and the demo runs 
+on a Logitech webcam, so sensor, optics and internal processing all differ.
+
+Aspect ratio- Training video was 720x1280 portrait, the webcam is 1920x1080
+landscape, so the face occupies a different fraction of the frame.
+
+Temporal scale- The temporal scale differs. Sixty frames spans about 3.3 seconds 
+when captured from the notebook at 18.3 fps, or about 2.5 seconds from the desktop
+application at 24 fps, against about 2 seconds in the training clips. The
+application is therefore closer to the training material than the notebook is,
+though neither matches it exactly.
+
+Lighting- The dataset was recorded in reasonably lit conditions throughout and 
+contains little lighting variation. Live performance in dim conditions is
+therefore extrapolation beyond the training distribution. Better performance
+under good lighting is expected but was not tested in this stage.
+
+Speaker dependence- The model is trained on one speaker's lips. It is a
+speaker-dependent system and is not expected to work for anyone else. This is
+a property of the dataset, not a defect.
+
+None of these are addressable without new data, and no new samples will be
+added to the dataset because this is a reconstruction of the 2024 project
+rather than new research.
+
+
+10. Defects in the original deployment path
+-------------------------------------------
+The original project had a working deployment path in web_app.ipynb and
+integration.ipynb, both of which now sit unchanged in src/archive/. A review of
+those files identified four defects. None of them appear in the rebuilt path
+described above, because that path was written from the dataset generation
+notebook rather than adapted from the older deployment code. The defects are
+recorded here so that the review is visible to a reader, and the archive files
+are deliberately left uncorrected because they are the record of how the
+original project ran.
+
+The first defect concerned frame trimming. Where a recording produced more than
+sixty frames, the training pipeline discarded eighty percent of the excess from
+the end and the remainder from the start, on the reasoning that the lips are
+closed at both ends of a recording and the informative movement lies in the
+middle. The deployment code did not follow this. One file removed eighty
+percent from the start, and the other removed ninety percent from the start,
+which meant the portion of the recording presented to the model at inference
+was not the portion the model had been trained on. The rebuilt path applies the
+training rule exactly, as described in section 5.
+
+The second defect was inference-only image processing. A helper applied
+sharpening and a five percent brightness increase to frames before prediction.
+This processing was never applied to the training data, so it introduced a
+systematic difference between what the model learned from and what it was asked
+to classify. It ran in one of the two deployment files but not the other, so
+the two paths did not even agree with each other. The rebuilt path applies no
+such processing and passes crops to the grid exactly as dlib produces them.
+
+The third defect was a stale frame hazard. The directory holding cropped frames
+was never emptied between runs. If a run produced fewer than sixty crops, crops
+from the previous recording remained on disk, and the grid was then assembled
+from a mixture of two different recordings without any error being raised. The
+rebuilt path clears the entire runtime directory at the start of every capture,
+and the cropping routine additionally clears its own output directory before
+writing, so a grid can only ever contain frames from the current recording.
+
+The fourth defect was a crash in the gesture handling. A filename variable was
+assigned in the branch that handled the open hand gesture and referenced in the
+branch that handled the closed fist, so showing a fist before an open hand
+raised a NameError. The rebuilt path writes no video file at all, so the
+variable does not exist, and a finished flag ends the session after a single
+open hand to fist cycle, which means a fist shown first does nothing and a
+second recording cannot begin by accident.
+
+
+11. Sentence generation
+-----------------------
+Once a word has been recognised, a fine-tuned T5-small model generates a
+sentence containing it. This part of the system was not rebuilt. The saved
+model from the original project is used unchanged, and its recorded test loss,
+perplexity, BLEU, METEOR and Distinct-1 figures continue to describe it
+accurately.
+
+The prompt format and the generation settings were recovered from the original
+deployment notebook so that the model receives input in the form it was
+fine-tuned on. The prompt is the phrase "Generate a sentence for", followed by
+the predicted word and a colon. Generation uses sampling with a maximum length
+of 20 tokens, top-k of 50 and top-p of 0.9.
+
+One setting was changed. The original temperature of 0.9 was lowered to 0.6
+after comparing twenty sample sentences generated across four combinations of
+temperature and top-k. At 0.9 the model produced sentences that were
+grammatical but frequently incoherent, placing a cup inside another cup or
+serving fish in a refrigerator. At 0.6 the sentences read as ordinary English
+in nine cases out of ten, without the loss of variety that tighter sampling
+often causes. Narrowing top-k was tried at the same time and did not help.
+
+This change should be understood for what it is. It alters only how the model
+is sampled at inference time. It does not alter the model, and it does not
+change any of the recorded metrics, which were computed at the original
+settings and remain the measured description of the model's performance.
+
+Sentence quality varies noticeably by word. Concrete nouns such as cup, fish
+and red produce natural sentences. The adjective hot produces sentences that
+repeat the word two or three times and often make little sense. This is
+consistent with the recorded Distinct-1 figure of 0.0120, which already
+indicated heavily repetitive output, and it is a property of the fine-tuned
+model rather than something the sampling settings can correct.
+
+
+12. Extracting the pipeline into a shared module
+------------------------------------------------
+The pipeline functions were originally written as notebook cells. When work
+began on the desktop application it became clear that an application cannot
+import from a notebook, so the logic would either have to be duplicated or
+moved somewhere both could use. Duplication was rejected because two copies of
+the same functions drift apart over time.
+
+The functions were therefore moved into src/pipeline.py, which holds runtime
+clearing, frame normalisation, lip cropping and gap filling, mouth box
+measurement, grid assembly, model loading, word prediction and sentence
+generation. Both the notebook and the desktop application import from this
+module, so the two run identical logic by construction rather than by
+inspection.
+
+Three changes were made during the move. Each function gained a flag that
+suppresses its printed output, so that the application can call it silently
+while the notebook still reports each step. The dlib detector and predictor now
+load on first use rather than when the module is imported, and TensorFlow and
+the transformers library are imported inside the functions that need them, so
+that importing the module remains fast. The runtime clearing function now
+creates the runtime directories before attempting to empty them, which removes
+a failure that occurred when the directory did not yet exist.
+
+Paths were centralised at the same time in src/config.py, which derives the
+project root from its own location rather than being hardcoded. This replaced
+an absolute path that would only have worked on one machine.
+
+The notebook as it stood before this change, with every function defined
+inline, is preserved at src/archive/lip_reading_inference_demo_standalone.ipynb.
+It is kept because it shows the pipeline being built up one step at a time,
+which is easier to follow than a set of imports.
+
+
+13. Status
+----------
+The live path from webcam capture to CNN word prediction runs end to end on
+Windows, CPU only.

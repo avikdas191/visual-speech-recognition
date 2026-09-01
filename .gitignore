@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Transient demo output
+runtime/
+
+# Datasets and models, not distributed
+data/lip_images/
+data/text_corpus/
+models/*.h5
+models/*.dat
+models/t5_fine_tuned_local/

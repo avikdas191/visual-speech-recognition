@@ -1,0 +1,220 @@
+How to reason about CNN architecture without guessing
+=====================================================
+
+Written for this project, but the method is general. The purpose is to
+show that most architecture decisions can be narrowed by arithmetic
+before any training happens, rather than by trying layouts at random.
+
+Read alongside architecture_experiments.txt, which records what
+happened when this reasoning was tested. Some of it did not survive
+contact with the data, and that is noted where relevant.
+
+
+THE PROBLEM
+-----------
+Faced with a CNN, the questions are: how many convolutional layers,
+how many dense layers, how wide. The common approach is to try
+combinations until something works. That wastes time and produces no
+understanding.
+
+Three quantities narrow the space substantially. All three are
+arithmetic, computable before training.
+
+
+QUANTITY 1: PARAMETERS PER TRAINING SAMPLE
+------------------------------------------
+The original model:
+
+  Total parameters:        51,434,058
+  Training images:                900
+  Parameters per sample:       57,149
+
+Where they sit:
+
+  Conv layers (2)              19,392   0.04%
+  Flatten -> Dense(256)    51,380,480  99.90%
+  Dense(128), Dense(10)        34,186   0.07%
+
+Flatten produces 56 x 56 x 64 = 200,704 features. A Dense(256) on top
+of that is 200,704 x 256 = 51,380,480 weights. Effectively the entire
+network is one layer, and the part that actually looks at the image is
+under a twentieth of one percent of it.
+
+The symptom appears in the training curve: accuracy reaches 1.0000 by
+epoch 9 while validation flattens around 0.73. The model memorises 900
+images because it has capacity to memorise far more.
+
+The same error, larger, appears in the abandoned 3D-CNN from the
+original project: a flattened 3D feature map into Dense(512) gave 554
+million parameters against 80 training samples. That model converged
+to a loss of 1.6902 against ln(5) = 1.6094 - it defaulted to uniform
+prediction and learned nothing.
+
+So: compute this number first. If nearly all parameters are in one
+dense layer, that is the finding, and it precedes any question about
+depth or width.
+
+
+QUANTITY 2: RECEPTIVE FIELD
+---------------------------
+The receptive field is how many input pixels one neuron can see. It
+grows layer by layer, and two quantities are tracked together:
+
+  RF   - how many input pixels the neuron sees
+  jump - how far apart, in input pixels, adjacent neurons' centres are
+
+Update rules:
+
+  RF_out   = RF_in + (kernel_size - 1) x jump_in
+  jump_out = jump_in x stride
+
+Starting at RF = 1, jump = 1, for a stack of Conv 3x3 (stride 1)
+followed by MaxPool 2x2 (stride 2):
+
+  Block 1:  Conv: RF = 1 + 2x1 = 3     jump = 1
+            Pool: RF = 3 + 1x1 = 4     jump = 2
+  Block 2:  Conv: RF = 4 + 2x2 = 8     jump = 2
+            Pool: RF = 8 + 1x2 = 10    jump = 4
+  Block 3:  Conv: RF = 10 + 2x4 = 18   jump = 4
+            Pool: RF = 18 + 1x4 = 22   jump = 8
+  Block 4:  Conv: RF = 22 + 2x8 = 38   jump = 8
+            Pool: RF = 38 + 1x8 = 46   jump = 16
+  Block 5:  Conv: RF = 46 + 2x16 = 78  jump = 16
+            Pool: RF = 78 + 1x16 = 94  jump = 32
+
+Summary:
+
+  Blocks    RF    jump    Feature map
+    1        4      2      112 x 112
+    2       10      4       56 x 56
+    3       22      8       28 x 28
+    4       46     16       14 x 14
+    5       94     32        7 x 7
+
+Note what is happening: as the feature map shrinks, each surviving
+neuron's view widens. The map getting smaller is the mechanism; the
+view getting wider is the result. RF roughly doubles per block while
+parameters stay cheap, which is why depth is an efficient way to buy
+reach.
+
+
+QUANTITY 3: WHAT THE TEST SET CAN RESOLVE
+-----------------------------------------
+The real-only test set holds 9 images per class, 90 total. One image
+is 1.1 percentage points overall and 11 points for its class.
+
+A difference of 2 points cannot be distinguished from noise. Any
+experiment whose expected gain is below roughly 5 points is not
+measurable with this data.
+
+This is a hard constraint, and it argues for few large changes rather
+than many small ones. It also means results must be reported as a mean
+across several training seeds with the spread stated, because random
+weight initialisation alone moves the result by several points.
+
+
+APPLYING THIS TO THE GRID REPRESENTATION
+----------------------------------------
+The input is 60 lip crops tiled into one image. Cell size in the
+final 224 x 224:
+
+  width  = 224 / 6 columns = 37.3 px
+  height = 224 / 10 rows   = 22.4 px
+
+The original model has RF = 10 px. That is 27% of a cell's width and
+45% of its height. No neuron in the convolutional stack has ever seen
+a complete frame, let alone two.
+
+So the conv layers act as a per-frame texture detector, and every
+temporal comparison - the entire lip-reading task - is left to the
+dense layer.
+
+Layout matters here. In a grid filled left-to-right:
+
+  horizontal neighbour = next frame        (t, t+1)
+  vertical neighbour   = six frames later  (t, t+6)
+
+To span two cells:
+
+  horizontally: 2 x 37.3 = 74.7 px
+  vertically:   2 x 22.4 = 44.8 px
+
+Cross-referencing with the depth table:
+
+  Blocks   RF    sees t,t+6 (>=44.8)   sees t,t+1 (>=74.7)
+    2      10          no                    no
+    3      22          no                    no
+    4      46         yes                    no
+    5      94         yes                   yes
+
+At exactly 4 blocks the network gains long-range temporal comparison
+before short-range, which is the less useful ordering. At 5 it has
+both. The practical implication is narrow: if building a 4-block
+model, go to 5.
+
+Under a weaker criterion (centre-to-centre rather than full span, so
+22.4 and 37.3) the inversion disappears entirely - 4 blocks satisfies
+both. So this is a marginal effect visible only under the stricter
+reading, at one depth.
+
+Note also that receptive field is a geometric upper bound. The
+effective receptive field - what actually influences the output - is
+smaller and concentrated near the centre. These thresholds are
+optimistic, which argues in the same direction.
+
+
+ON THE GRID LAYOUT ITSELF
+-------------------------
+A transpose to 10 columns x 6 rows was considered and rejected. The
+arithmetic:
+
+  Lip crop is 112 x 80, aspect ratio 1.40 (wider than tall).
+
+  6 cols x 10 rows -> 672 x 800 -> resized to 224 x 224
+    cell = 37.3 x 22.4, aspect 1.67  (19% horizontal stretch)
+
+  10 cols x 6 rows -> 1120 x 480 -> resized to 224 x 224
+    cell = 22.4 x 37.3, aspect 0.60  (mouth becomes taller than wide)
+
+The transpose inverts the mouth's proportions entirely. The original
+layout is also provably the best available: for square output,
+
+  112 x cols = 80 x rows  and  cols x rows = 60
+  -> rows/cols = 1.4 -> cols = 6.55, rows = 9.16
+
+The nearest factor pair of 60 is 6 x 10. Every alternative is worse:
+
+  cols x rows    dimensions     ratio
+    5 x 12        560 x 960      0.58
+    6 x 10        672 x 800      0.84   <- chosen
+   10 x 6        1120 x 480      2.33
+   12 x 5        1344 x 400      3.36
+
+Separately: CNNs do not require square input. Conv2D accepts any
+height and width. The 19% distortion could be removed entirely by
+scaling 672 x 800 by 0.333 in both directions, giving 224 x 267 with
+the 1.40 aspect exactly preserved. This is untested and remains
+available.
+
+
+THE METHOD, STATED GENERALLY
+----------------------------
+1. Diagnose before searching. A training curve showing 1.0000 train
+   accuracy against flat validation says the problem is memorisation,
+   not insufficient capacity. That eliminates every experiment aimed
+   at adding capacity.
+
+2. Compute what can be computed. Parameter counts, receptive fields,
+   parameters per sample - all arithmetic, all available before
+   training.
+
+3. Order candidates by expected effect size. Fix the largest defect
+   first.
+
+4. One variable per experiment, several seeds each, report the spread.
+
+5. Stop when the measurement instrument cannot read the difference.
+
+6. Hold out a test set and touch it rarely. See the warning in
+   architecture_experiments.txt - this rule is necessary but not
+   sufficient.

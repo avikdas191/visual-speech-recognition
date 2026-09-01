@@ -1,0 +1,1 @@
+{"config": "m11_flat_dense64", "seed": 22, "total_params": 6272778, "trainable_params": 4014794, "final_train_acc": 1.0, "final_val_acc": 0.6150000095367432, "best_val_acc": 0.6200000047683716, "best_val_loss": 1.1394803524017334, "best_epoch": 10, "seconds": 53.4}

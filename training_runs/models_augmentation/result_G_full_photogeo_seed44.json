@@ -1,0 +1,1 @@
+{"config": "G_full_photogeo", "seed": 44, "train_samples": 1380, "val_samples": 250, "final_train_acc": 1.0, "final_val_acc": 0.6600000262260437, "best_val_acc": 0.6919999718666077, "best_val_loss": 0.9895904064178467, "best_epoch": 11, "seconds": 59.7}

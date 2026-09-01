@@ -1,0 +1,1 @@
+{"config": "m10_flat_dense_drop", "seed": 22, "total_params": 18317130, "trainable_params": 16059146, "final_train_acc": 0.9977777600288391, "final_val_acc": 0.6200000047683716, "best_val_acc": 0.625, "best_val_loss": 1.1096408367156982, "best_epoch": 14, "seconds": 55.8}

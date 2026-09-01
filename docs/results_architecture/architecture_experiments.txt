@@ -1,0 +1,243 @@
+Architecture experiments - results
+==================================
+
+Twelve configurations across three rounds, selected on validation,
+confirmed once on test.
+
+Outcome: the selected architecture performed WORSE on test than the
+baseline it was meant to improve. This document records what was
+tried, what was learned, and why the selection failed.
+
+
+BASELINE
+--------
+2 conv blocks (32, 64), Flatten, Dense(256, tanh), Dense(128, tanh),
+Dense(10, softmax). 51,434,058 parameters.
+
+  Validation (3 seeds): mean 0.7167, range 0.7000-0.7250
+  Full test (200):      0.7150
+  Real only (90):       0.7556
+
+
+ROUND 1 - depth and pooling head (4 configs, 3 seeds)
+-----------------------------------------------------
+  Config                  Params      Params/sample   Mean val
+  c0  2 blocks, Flatten   51,434,058     57,149        0.7167
+  c1  5 blocks, Flatten    8,025,546      8,917        0.7483
+  c2  2 blocks, GAP           70,218         78        0.1200
+  c3  5 blocks, GAP        1,734,090      1,927        0.4033
+
+c2 collapsed to chance level. Training accuracy was also at chance, so
+it never learned rather than overfitting. Two conv blocks produce
+edge-level channels; averaging 64 of them across the whole image
+discards the spatial arrangement that carries the information.
+
+c3 also failed badly, at 0.4033 with training accuracy 0.487 -
+underfitting.
+
+The hypothesis formed at this point was that global average pooling
+destroys positional information, and that in a grid image position IS
+time: cell (0,0) is frame 1, cell (9,5) is frame 60. Averaging
+collapses all 60 frames into channel means, destroying the ordering.
+
+Round 2 tested this and refuted it. See below.
+
+c1's spread was 0.6900-0.8050 - 11.5 points across three seeds, versus
+the baseline's 2.5. Its 3.2-point mean advantage was not distinguishable
+from that spread.
+
+
+ROUND 2 - position-preserving capacity reduction (5 configs, 5 seeds)
+---------------------------------------------------------------------
+  Config                       Params     Mean val   Std     Range
+  e2  5 blocks + extra pool   2,782,666    0.743    0.024  0.725-0.785
+  e0  5 blocks                8,025,546    0.733    0.034  0.700-0.790
+  e3  6 blocks                5,142,474    0.728    0.023  0.705-0.755
+  e4  4 blocks               13,267,914    0.688    0.012  0.675-0.700
+  e1  5 blocks + 1x1 conv 32  2,020,842    0.206    0.220  0.100-0.600
+
+e1 was the direct test of the position hypothesis. A 1x1 convolution
+reduces 512 channels to 32 while preserving all 49 spatial positions.
+If position were what GAP destroyed, e1 should have performed well.
+
+It did not. Four of five seeds sat at chance with training accuracy
+0.09-0.10 - never learned at all. One seed reached 0.60. That is a
+training failure, not a capacity limitation, and it looks like an
+initialisation lottery.
+
+At the time this was read as refuting the position explanation, and
+that reading was wrong. See the correction at the end of this
+document.
+
+What c2, c3 and e1 share is a narrow bottleneck immediately before tanh
+dense layers, and that - not the loss of spatial position - is what
+sank e1.
+
+Other observations:
+
+  Depth is not monotonic. 2 blocks 0.717, 4 blocks 0.688, 5 blocks
+  0.733-0.743, 6 blocks 0.728.
+
+  e4 (4 blocks) has the most parameters of any config at 13.3M,
+  the highest training accuracy at 1.0000, and the worst validation
+  of the working configs. More parameters produced more memorisation
+  and worse generalisation.
+
+  Parameter count alone does not predict performance in either
+  direction.
+
+Note on depth and parameters: deeper reduces parameters here, because
+the feature map halves in each dimension faster than channels double.
+4 blocks gives 13.3M; 5 gives 8.0M; 6 gives 5.1M.
+
+
+ROUND 3 - dense activation (3 configs, 5 seeds)
+-----------------------------------------------
+  Config                 Params      Mean val   Std     Mean train
+  f0  e2 with tanh      2,782,666     0.745    0.026     0.986
+  f1  e2 with relu      2,782,666     0.660    0.031     0.914
+  f2  baseline + relu  51,434,058     0.694    0.034     0.997
+
+tanh beat relu by 8.5 points at 5 blocks, with identical parameter
+counts and non-overlapping ranges (0.715-0.780 against 0.625-0.695).
+This is the largest and cleanest effect found in the whole search.
+
+f1's training accuracy is also lower - relu fits less, not more. That
+is consistent with dead units: relu outputs zero for negative inputs
+and those units stop receiving gradient permanently. In a dense layer
+following a bottleneck, losing part of 256 units costs real capacity.
+
+f2 tested the original 2-block architecture with relu, which the
+project author recalled having failed during the original work. It
+gave 0.694 against tanh's 0.717 - worse, though not the catastrophic
+failure remembered. The tanh choice, made on a supervisor's
+recommendation under time pressure, was correct.
+
+
+FINAL EVALUATION - and the failure
+----------------------------------
+Selected config: 5 conv blocks, extra pooling, Flatten, tanh dense
+layers. 2,782,666 parameters. Retrained with 3 seeds and evaluated on
+test for the first time.
+
+                     Baseline    Selected (mean of 3)
+  Validation          0.7167          0.7450
+  Full test (200)     0.7150          0.6750   (0.6700-0.6800)
+  Real only (90)      0.7556          0.7148   (0.7000-0.7222)
+
+Validation improved by 2.8 points. Test fell by 4 points on both
+measures. The test range across seeds is tight, so this is not seed
+noise.
+
+WHY THIS HAPPENED
+
+Twelve configurations were evaluated against the same 200 validation
+images. Selecting the best of twelve will find configurations suited
+to those particular 200 images, and part of that advantage does not
+transfer. A 2.8-point gain is well within what selection pressure
+alone can manufacture from twelve attempts.
+
+This is the same category of error the wider reconstruction exists to
+correct: measuring on data that has effectively been optimised
+against. The rule "select on validation, touch test once" was set in
+advance and followed. It was not sufficient, because it does not
+address the size of the selection pool relative to the validation
+set's resolution.
+
+A second factor: validation and test are 9 recording sessions each,
+differing in room, lighting and head angle. A configuration suited to
+validation's 9 sessions need not suit test's 9. At this size,
+validation is a weak proxy for test.
+
+
+WHAT HOLDS UP
+-------------
+  - GAP and 1x1 bottlenecks fail badly with this architecture.
+    Large, reproducible effects, not marginal.
+  - tanh clearly beats relu at 5 blocks. 8.5 points, non-overlapping
+    ranges across 5 seeds.
+  - Depth beyond 2 blocks does not reliably improve test performance.
+  - The 51M-parameter model can be replaced by a 2.8M model at
+    roughly comparable test accuracy. An efficiency result, not an
+    accuracy one.
+
+WHAT DOES NOT HOLD UP
+---------------------
+  - The claim that the selected architecture is better. On test, it
+    is not.
+  -   - The claim that the selected architecture is better. On test, it
+    is not.
+
+(The GAP hypothesis was listed here as refuted. It has since been
+confirmed - see the correction below.)
+
+
+DECISION
+--------
+The baseline architecture is retained as the reference for subsequent
+work. Stage 1 is recorded as a negative result.
+
+Running further architecture searches now would compound the selection
+problem rather than solve it. Later stages test data and training
+changes, which are less exposed to this failure mode - but the same
+constraint applies: few experiments, large expected effects, and the
+understanding that a 200-image validation set cannot resolve small
+differences.
+
+
+CORRECTION - THE GAP HYPOTHESIS WAS CORRECT
+===========================================
+Added after the pretrained backbone experiments.
+
+Round 1 of this stage produced the hypothesis that global average
+pooling fails on grid images because it destroys positional
+information: in a mosaic, spatial position IS frame index, so averaging
+the feature map collapses all 60 frames into channel means.
+
+Round 2 tested this with e1, a 1x1 convolution bottleneck that
+preserves all 49 spatial positions while reducing channels. e1 failed -
+four of five seeds never trained. This was taken as refuting the
+hypothesis, and it was recorded above as not holding up.
+
+That conclusion was wrong.
+
+The pretrained backbone experiments settled it directly. Using a frozen
+MobileNetV2 with identical weights and identical features, changing
+only the head:
+
+  GAP head       mean validation 0.310   training accuracy 0.297
+  Flatten head   mean validation 0.618   training accuracy 0.999
+
+The features were identical in both cases. The only difference was
+whether the 7x7 feature map was averaged or flattened. Averaging halved
+performance and prevented the model from fitting even the training set.
+
+The pattern held across all twenty pretrained configurations: every GAP
+configuration sat near chance (0.310 and 0.121), every Flatten
+configuration cleared 0.42.
+
+e1 failed for a different reason. Its 1x1 convolution squeezed 512
+channels to 32 immediately before tanh dense layers, and the resulting
+narrow bottleneck prevented training entirely - visible in its training
+accuracy of 0.09 to 0.10 on four of five seeds, which is chance rather
+than underfitting. The same failure appears in c2 and c3 (GAP feeding
+tanh) and later in batch normalisation before the same layers. The
+architecture is sensitive at the conv-to-dense boundary, and e1 hit
+that sensitivity rather than testing what it was meant to test.
+
+The methodological point: e1 was a single experiment intended to test
+one hypothesis, and when it failed the hypothesis was discarded without
+checking whether the experiment had failed for an unrelated reason. A
+failed test of a hypothesis is only evidence against it if the test
+itself was sound.
+
+
+LOGS
+----
+  models_comparison/architecture_comparison_log.csv         round 1
+  models_comparison/architecture_comparison_round2_log.csv  round 2
+  models_comparison/architecture_comparison_round3_log.csv  round 3
+  models_comparison/final_model_evaluation_log.csv          final
+  models_comparison/history_*.csv                           per-run curves
+
+Trained model files were not retained.

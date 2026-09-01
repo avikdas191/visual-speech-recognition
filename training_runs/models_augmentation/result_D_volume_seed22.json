@@ -1,0 +1,1 @@
+{"config": "D_volume", "seed": 22, "train_samples": 1380, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.75, "best_val_acc": 0.75, "best_val_loss": 0.7494403719902039, "best_epoch": 11, "seconds": 58.2}

@@ -1,0 +1,1 @@
+{"config": "m8_flat_dense_lr1e3", "seed": 44, "total_params": 18317130, "trainable_params": 16059146, "final_train_acc": 0.4655555486679077, "final_val_acc": 0.3449999988079071, "best_val_acc": 0.38499999046325684, "best_val_loss": 1.641036868095398, "best_epoch": 13, "seconds": 54.1}

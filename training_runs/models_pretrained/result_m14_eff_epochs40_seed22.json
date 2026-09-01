@@ -1,0 +1,1 @@
+{"config": "m14_eff_epochs40", "seed": 22, "total_params": 20108717, "trainable_params": 16059146, "epochs_run": 40, "train_samples": 900, "final_train_acc": 0.996666669845581, "final_val_acc": 0.7649999856948853, "best_val_acc": 0.8100000023841858, "best_val_loss": 0.717415452003479, "best_epoch": 27, "seconds": 123.7}

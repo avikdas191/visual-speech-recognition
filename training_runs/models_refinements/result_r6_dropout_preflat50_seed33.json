@@ -1,0 +1,1 @@
+{"config": "r6_dropout_preflat50", "seed": 33, "epochs_run": 15, "final_train_acc": 1.0, "final_val_acc": 0.6549999713897705, "best_val_acc": 0.7049999833106995, "best_val_loss": 0.9265190958976746, "best_epoch": 15, "seconds": 48.7}

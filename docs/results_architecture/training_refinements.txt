@@ -1,0 +1,181 @@
+Training refinements - results
+==============================
+
+Seven configurations, five seeds each, tested against the baseline
+architecture on validation only.
+
+Outcome: no intervention produced an effect above noise. One - batch
+normalisation - was substantially harmful. This document records what
+was tried, what was predicted in advance, and what the null result
+means.
+
+
+WHY THE BASELINE AND NOT THE STAGE 1 ARCHITECTURE
+-------------------------------------------------
+Stage 1 selected a 5-block architecture on validation, then found it
+performed worse on test than the 51M-parameter baseline. The baseline
+was therefore retained as the reference. See architecture_experiments.txt.
+
+
+PREDICTIONS, RECORDED BEFORE RUNNING
+------------------------------------
+Written in advance so results could not be rationalised afterward -
+a discipline adopted after Stage 1, where the losing hypothesis had
+not been committed to on paper before testing.
+
+  Early stopping   0 to +2 points. Validation loss bottoms around
+                   epoch 11 and drifts. Recovering those epochs is a
+                   small gain, likely below the measurement margin.
+
+  Batch norm       Uncertain, -3 to +5. Usually helps deep networks
+                   converge, but this is 2 blocks and already reaches
+                   1.0000 training accuracy - no convergence problem
+                   to fix.
+
+  Dropout          Most likely to help, 0 to +6. The failure mode is
+                   memorisation and dropout targets it directly.
+
+  Pre-flatten      Training accuracy should fall below 1.0000. If it
+  dropout          does not, the intervention is not biting and the
+  (added later)    result is uninformative either way.
+
+Margin set in advance: anything under 5 validation points is not
+treated as a real effect. Stage 1's 2.8-point validation gain
+reversed on test.
+
+
+CONFIGURATIONS
+--------------
+All use the baseline architecture: 2 conv blocks (32, 64), Flatten,
+Dense(256, tanh), Dense(128, tanh), Dense(10, softmax). Adam 1e-4,
+batch 16, 15 epochs.
+
+  r0  baseline, unmodified
+  r1  EarlyStopping on val_loss, patience 4, restore_best_weights
+  r2  BatchNormalization after each conv, before pooling
+  r3  Dropout 0.3 after Dense(256)
+  r4  Dropout 0.5 after Dense(256)
+  r5  Dropout 0.3 after Flatten, before Dense(256)
+  r6  Dropout 0.5 after Flatten, before Dense(256)
+
+Parameter count is 51,434,058 for all except r2, which adds 384 for
+the batch norm statistics.
+
+
+RESULTS
+-------
+  Config                 Mean val   Std     Range          Mean train
+  r0 baseline              0.716   0.013   0.700-0.730       1.0000
+  r1 early stopping        0.711   0.024   0.675-0.735       1.0000
+  r2 batch norm            0.490   0.056   0.435-0.550       0.6582
+  r3 dropout 0.3           0.721   0.023   0.690-0.750       1.0000
+  r4 dropout 0.5           0.711   0.026   0.685-0.750       1.0000
+  r5 pre-flatten 0.3       0.714   0.021   0.685-0.735       1.0000
+  r6 pre-flatten 0.5       0.718   0.008   0.705-0.725       1.0000
+
+Every configuration except r2 lands within 0.6 points of the baseline.
+The spread across seeds within a single configuration - 0.8 to 5.6
+points - is larger than every difference between configurations.
+
+There is no signal here.
+
+
+EARLY STOPPING NEVER TRIGGERED
+------------------------------
+All runs completed 15 epochs. With patience 4 and validation loss
+bottoming around epoch 11, there were never four consecutive
+non-improving epochs before the budget ran out.
+
+r1 is therefore identical to r0 in effect, and its small difference is
+seed noise. The prediction was correct and the effect unmeasurable.
+
+
+DROPOUT DID NOT BITE
+--------------------
+Training accuracy remained exactly 1.0000 under every dropout
+configuration, including 50% applied to the flattened features.
+
+That is the informative part. The model memorises 900 images while
+half of its 200,704 input features are randomly zeroed on every batch.
+Any random half of the features is sufficient to identify every
+training image.
+
+This reframes what "memorisation" means for this model. It is not that
+capacity is marginally sufficient to store the training set - it is so
+far in excess that masking activations does not constrain it at all.
+Dropout addresses co-adaptation between units; the problem here is
+that 200,704 features describing 900 images are massively
+over-determined.
+
+The pre-flatten placement (r5, r6) was added specifically to test
+whether position mattered - dropping input features rather than
+downstream activations. It made no difference. The prediction that
+training accuracy would fall was wrong.
+
+
+BATCH NORMALISATION FAILED
+--------------------------
+Mean validation 0.490 against the baseline's 0.716 - a 22.6 point
+loss, well outside the -3 to +5 range predicted.
+
+Training accuracy also fell to 0.658, so this is not a different
+overfitting profile. The model stopped fitting.
+
+This is the fourth time in this phase that a component inserted near
+the conv-to-dense boundary has caused a large failure:
+
+  global average pooling      collapsed to chance
+  1x1 convolution bottleneck  failed to train on 4 of 5 seeds
+  relu in place of tanh       -8.5 points
+  batch normalisation         -22.6 points
+
+The pattern is consistent enough to state as a finding: this
+architecture is unusually sensitive to modifications around that
+boundary, and the tanh dense layers appear to be load-bearing in a way
+that is not obvious from the architecture alone. No mechanism is
+offered here - the observation is recorded, not explained.
+
+Note for the record: the original project logbook entry of
+28 November reads "add batch normalization to the ok model." This was
+never carried out. The answer is now on record - in this position, it
+would have made results substantially worse.
+
+
+WHAT THIS ESTABLISHES
+---------------------
+The model's ceiling is not a training problem.
+
+Early stopping, dropout at two rates in two positions, and batch
+normalisation all fail to move validation accuracy. Regularisation
+cannot fix what limits this model.
+
+Combined with Stage 1: capacity reduction has to be structural. A
+2.8M-parameter architecture performs comparably to the 51.4M baseline,
+but that reduction cannot be achieved by masking activations. The
+parameters have to not exist.
+
+What remains untested is the data itself - colour, aspect ratio, and
+augmentation volume. Those are the subject of the following stages.
+
+
+A PRACTICAL NOTE
+----------------
+Running 35 models sequentially in one process exhausted the 8 GB GPU.
+TensorFlow does not return memory to the driver once allocated, so
+clear_session() and garbage collection free the graph inside
+TensorFlow's own pool while the process continues to hold the memory.
+Setting a hard memory limit instead of growth also failed.
+
+The working solution was to run each training as a separate
+subprocess, so memory is released on process exit. This is implemented
+in cnn_training_refinements_worker.py, called from the notebook.
+
+Worth noting as a cost of the 51M-parameter baseline: the 2.8M
+architecture from Stage 1 would not have hit this ceiling.
+
+
+LOGS
+----
+  models_refinements/training_refinements_log.csv   summary
+  models_refinements/history_*.csv                  per-run curves
+  models_refinements/result_*.json                  per-run results

@@ -1,0 +1,1 @@
+{"config": "m15_eff_volume", "seed": 22, "total_params": 20108717, "trainable_params": 16059146, "epochs_run": 15, "train_samples": 1380, "final_train_acc": 0.980434775352478, "final_val_acc": 0.7300000190734863, "best_val_acc": 0.7300000190734863, "best_val_loss": 0.7958937287330627, "best_epoch": 14, "seconds": 84.7}

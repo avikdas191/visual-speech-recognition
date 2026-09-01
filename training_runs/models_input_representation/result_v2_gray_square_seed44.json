@@ -1,0 +1,1 @@
+{"config": "v2_gray_square", "seed": 44, "params": 51433482, "final_train_acc": 1.0, "final_val_acc": 0.6349999904632568, "best_val_acc": 0.6800000071525574, "best_val_loss": 1.0445860624313354, "best_epoch": 12, "seconds": 44.1}

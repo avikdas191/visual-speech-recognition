@@ -1,0 +1,1 @@
+{"config": "v0_rgb_square", "seed": 44, "params": 51434058, "final_train_acc": 1.0, "final_val_acc": 0.6700000166893005, "best_val_acc": 0.699999988079071, "best_val_loss": 1.0190386772155762, "best_epoch": 12, "seconds": 43.6}

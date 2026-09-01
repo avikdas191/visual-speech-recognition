@@ -1,0 +1,72 @@
+Frame extraction from source video
+==================================
+
+Source: 60 recording sessions x 10 words = 600 .mp4 files
+Location: Data for lip reading model/Videos of 10 selected words named/
+Access: read-only. No file in the source folder was moved, renamed,
+        altered or deleted at any stage of the rebuild.
+
+Output: 01_frames_original/set_NN/word/01.png ... 60.png
+Total written: 36,000 frames (600 videos x 60 frames)
+
+TARGET FRAME COUNT
+------------------
+Every video is reduced or extended to exactly 60 frames. 60 was fixed
+by the original project design: the 60 frames are later tiled into a
+single 6 columns by 10 rows grid image, so the count cannot vary.
+
+TRIMMING RULE (video longer than 60 frames)
+-------------------------------------------
+Excess frames are removed 20% from the start and 80% from the end.
+
+Reason: recordings were started before the speaker began the word and
+stopped some time after finishing, and the trailing buffer is
+consistently longer than the leading one. Removing more from the end
+therefore keeps the spoken word closer to the centre of the retained
+sequence.
+
+This ratio was chosen in the original project after testing several
+alternatives. It is reproduced here unchanged so that the rebuilt
+dataset differs from the original only in how the data is split.
+
+Note: other ratios appear elsewhere in the original codebase
+(90/10 in integration.ipynb, 80/20 in web_app.ipynb). The 20/80 value
+used here is the one from initial_data_ready.ipynb, which is the
+notebook that produced the training data.
+
+PADDING RULE (video shorter than 60 frames)
+-------------------------------------------
+The final frame is repeated until the count reaches 60.
+
+Consequence: a short video produces a grid image whose last cells are
+duplicates of a single still frame. This is recorded per video in the
+extraction log.
+
+RESULT
+------
+Source frame counts ranged from 40 to 93 (mean 67.2).
+  432 videos were trimmed
+  123 videos were padded
+   45 videos required no adjustment
+
+The 123 padded videos carry repeated end frames. The most extreme case
+began at 40 frames, meaning 20 of its 60 frames are duplicates of one
+still image. This characteristic is inherited from the original
+recordings and is present in the original dataset as well; it is
+logged here because it was never previously measured.
+
+All 600 videos were 720x1280 (portrait). Resolution is uniform across
+the dataset, so face detection received consistent input.
+
+IMPLEMENTATION NOTE
+-------------------
+The original extraction used ThreadPoolExecutor to write frames.
+This rebuild writes sequentially. Frame ordering is unaffected in
+either case because each frame's index is embedded in its filename,
+but sequential writing removes any dependence on completion order.
+
+LOG
+---
+logs/frame_extraction_log.csv records, per video: source frame count,
+frames written, number padded, number trimmed from start and end, and
+frame dimensions.

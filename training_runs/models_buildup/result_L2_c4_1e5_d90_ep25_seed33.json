@@ -1,0 +1,1 @@
+{"config": "L2_c4_1e5", "dataset": "d90", "seed": 33, "params": 25752842, "train_samples": 900, "epochs": 25, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.7149999737739563, "best_val_acc": 0.75, "best_val_loss": 0.8685303330421448, "best_epoch": 12, "seconds": 63.8}

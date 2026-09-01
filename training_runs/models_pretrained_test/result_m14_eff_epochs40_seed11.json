@@ -1,0 +1,1 @@
+{"config": "m14_eff_epochs40", "seed": 11, "val_acc": 0.75, "test_full_acc": 0.6650000214576721, "test_full_loss": 0.9583642482757568, "test_real_acc": 0.6666666865348816, "test_real_loss": 0.8460696935653687, "seconds": 124.6}

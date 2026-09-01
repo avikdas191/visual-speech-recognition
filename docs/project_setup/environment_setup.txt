@@ -1,0 +1,171 @@
+Environment setup and reconstruction
+====================================
+
+This document explains why the reconstruction work runs under WSL2
+with pinned library versions rather than in a current environment, how
+the version numbers were recovered, and what the hardware setup is.
+
+Read this first if you are returning to the project or picking it up
+for the first time.
+
+
+WHY VERSIONS MATTER HERE
+------------------------
+The original project was built in December 2024. The goal of the
+reconstruction is to regenerate evaluation metrics from the model as
+it was trained - not to modernise it. A newer library that changes a
+default, alters a resampling algorithm, or renames a parameter will
+produce different numbers from the same code and the same data, with
+no error to indicate it happened.
+
+The environment is therefore pinned to match the original as closely
+as it could be recovered.
+
+
+THE PROBLEM THAT FORCED WSL2
+----------------------------
+The first attempt used TensorFlow 2.10 on native Windows. Loading the
+saved model failed:
+
+  ValueError: Unrecognized keyword arguments: ['batch_shape']
+
+Reading the .h5 metadata directly showed keras_version 3.7.0. Keras 3
+changed the serialisation schema - batch_shape replaced
+batch_input_shape - so Keras 2.10 cannot parse the file.
+
+Keras 3 requires TensorFlow 2.16 or later. On native Windows,
+TensorFlow dropped GPU support after 2.10; anything newer runs on CPU
+only. The options were a CPU-only environment, converting the model,
+or moving to WSL2.
+
+WSL2 was chosen. Model conversion risks silently altering weights, and
+the whole purpose of this work is to produce numbers that can be
+defended. Loading the original file in its native format removes that
+category of doubt entirely.
+
+
+HOW THE VERSIONS WERE RECOVERED
+-------------------------------
+None of this was documented in the original project. Each version was
+recovered from an artefact:
+
+  keras 3.7.0        - keras_version attribute inside
+                       model2811_361_21_d130_GOOD.h5
+  tensorflow 2.18.0  - printed in captured output cells of
+                       final_data_ready.ipynb and
+                       initial_data_ready.ipynb
+  transformers 4.46.3 - transformers_version field in
+                       t5_fine_tuned_local/config.json
+  accelerate 1.1.1   - a code comment in txtdata_1st.ipynb
+  mediapipe 0.10.14  - captured output in integration.ipynb and
+                       web_app.ipynb
+  albumentations 1.4.21 - not recorded anywhere; chosen as the version
+                       current in December 2024, confirmed by testing
+                       that all 16 augmentation parameter sets execute
+
+All recovered versions are mutually consistent and match the December
+2024 timestamps on the model files.
+
+Note on albumentations: version 2.x removed several parameters the
+original code uses - GaussNoise's var_limit and OpticalDistortion's
+shift_limit among them. Installing a current version would either
+error or silently behave differently.
+
+
+HARDWARE
+--------
+  CPU: AMD Ryzen 5 3600 (6 cores, 12 threads)
+  RAM: 32 GB DDR4
+  GPU: NVIDIA GeForce RTX 3050, 8 GB VRAM, compute capability 8.6
+
+Under WSL2, TensorFlow allocates approximately 5.6 GB of the 8 GB.
+This is sufficient for the models in this project.
+
+GPU passthrough to WSL2 requires only the Windows NVIDIA driver. No
+CUDA toolkit is installed inside Linux - the tensorflow[and-cuda]
+wheel bundles the CUDA libraries it needs. Hardware virtualisation
+(SVM Mode in BIOS) must be enabled.
+
+
+CURRENT ENVIRONMENT
+-------------------
+  Location: WSL2, Ubuntu 22.04 LTS
+  Conda env: the_sheff
+  Python 3.11
+
+  tensorflow      2.18.0   (installed as tensorflow[and-cuda])
+  keras           3.7.0    (downgraded from the 3.15.1 that TF pulled)
+  numpy           2.0.2
+  opencv          5.0.0
+  dlib            20.0.1
+  albumentations  1.4.21
+  transformers    4.46.3
+  accelerate      1.1.1
+
+Verify GPU with:
+  python -c "import tensorflow as tf; print(tf.config.list_physical_devices('GPU'))"
+
+Expected:
+  [PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]
+
+The cuFFT / cuDNN / cuBLAS "already registered" messages that appear on
+import are normal TensorFlow noise under WSL2 and can be ignored.
+
+
+PROTECTING THE ENVIRONMENT
+--------------------------
+Installing any package can pull a different version of a dependency
+and break the setup silently. This happened once during setup, when
+installing the supporting libraries replaced numpy with a version
+outside TensorFlow's supported range.
+
+A constraints file at ~/constraints.txt pins the critical packages.
+Install through it:
+
+  pip install -c ~/constraints.txt <package>
+
+pip will then refuse an install that would violate a pin, rather than
+silently downgrading.
+
+Two things to know:
+
+  - constraints.txt governs pip only. A conda install can still
+    replace a pinned package. Read the "will be INSTALLED" list before
+    approving any conda operation.
+  - After any install, re-run the GPU check above. It takes seconds,
+    and catching a break immediately is far easier than discovering it
+    three installs later.
+
+
+KNOWN VERSION DIFFERENCES FROM THE ORIGINAL
+-------------------------------------------
+Not everything could be matched. These are uncontrolled differences,
+recorded so they are visible rather than forgotten:
+
+  dlib      20.0.1 here, 19.24.2 originally. The landmark predictor
+            file is identical and detection behaviour is stable across
+            these versions, but this was not verified against original
+            output because the intermediate cropped frames were not
+            retained.
+
+  opencv    5.0.0 here. The original version is unknown. Used for
+            video decoding and image operations; behaviour is stable.
+
+  OS        Ubuntu 22.04 here, Windows originally. Filesystem and path
+            handling differ; numerical behaviour does not.
+
+
+PROJECT LAYOUT
+--------------
+  ~/lip_codebase_clean/      the cleaned repository (working copy)
+  ~/rebuild_workspace/       intermediate data for the dataset rebuild
+  /mnt/d/lip_codebase/       the original archive, read-only in practice
+  /mnt/d/lip_codebase_clean/ backup copy of the repository
+
+The codebase was copied from /mnt/d/ into the Linux filesystem for
+performance. Cross-filesystem access through /mnt/ is significantly
+slower than native ext4 under WSL2, which matters when processing tens
+of thousands of image files.
+
+Source video files are never modified. All rebuild stages read from
+the archive and write into rebuild_workspace.

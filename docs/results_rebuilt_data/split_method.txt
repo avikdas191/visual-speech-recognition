@@ -1,0 +1,23 @@
+Session-based split for rebuilt dataset
+=======================================
+
+Source: 60 recording sessions, 10 words each (600 videos)
+Split: 42 train / 9 validation / 9 test sessions
+
+Method: stratified random assignment by recording location,
+using random.Random(seed).shuffle within each location group.
+
+Seed: 4
+
+Seed selection: seeds were checked against a fixed criterion set
+before searching - that all five head angles (normal, up, left,
+right, down) appear in both the test and validation splits.
+Angle was not stratified directly because 9 test sessions across
+5 angles and 8 locations gives strata too small to fill.
+Seeds 42, 7, 3, 11, 5, 13, 17 and 4 were examined; seed 4 gave
+the most even angle distribution meeting the criterion.
+The criterion concerns condition coverage only, not model accuracy.
+
+Rule: augmented images are generated only from sessions within
+their own split. No augmented image derives from a session
+assigned to a different split.

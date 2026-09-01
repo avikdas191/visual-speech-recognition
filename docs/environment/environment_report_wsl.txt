@@ -1,0 +1,74 @@
+=== date ===
+Wed Aug 26 16:59:12 CEST 2026
+=== os ===
+Distributor ID:	Ubuntu
+Description:	Ubuntu 22.04.5 LTS
+Release:	22.04
+Codename:	jammy
+Linux DESKTOP-TQ2MAH6 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+=== python ===
+Python 3.11.15
+/home/admins/miniconda3/envs/the_sheff/bin/python
+=== conda ===
+conda 26.5.3
+
+     active environment : the_sheff
+    active env location : /home/admins/miniconda3/envs/the_sheff
+            shell level : 2
+       user config file : /home/admins/.condarc
+ populated config files : /home/admins/miniconda3/.condarc
+                          /home/admins/miniconda3/condarc.d/anaconda-auth.yml
+          conda version : 26.5.3
+    conda-build version : not installed
+         python version : 3.14.6.final.0
+                 solver : libmamba (default)
+       virtual packages : __archspec=1=zen2
+                          __conda=26.5.3=0
+                          __cuda=13.3=0
+                          __glibc=2.35=0
+                          __linux=6.18.33.2=0
+                          __unix=0=0
+       base environment : /home/admins/miniconda3  (writable)
+      conda av data dir : /home/admins/miniconda3/etc/conda
+  conda av metadata url : None
+=== nvidia-smi ===
+Wed Aug 26 16:59:13 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 610.57.01              KMD Version: 610.88        CUDA UMD Version: 13.3     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3050        On  |   00000000:08:00.0  On |                  N/A |
+|  0%   31C    P8            N/A  /  115W |    1090MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              31      G   /Xwayland                             N/A      |
++-----------------------------------------------------------------------------------------+
+=== key versions ===
+2026-08-26 16:59:14.342195: E external/local_xla/xla/stream_executor/cuda/cuda_fft.cc:477] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+E0000 00:00:1787756354.405298   59452 cuda_dnn.cc:8310] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+E0000 00:00:1787756354.422043   59452 cuda_blas.cc:1418] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+2026-08-26 16:59:14.547124: I tensorflow/core/platform/cpu_feature_guard.cc:210] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+  check_for_updates()
+tensorflow 2.18.0
+keras 3.7.0
+numpy 2.0.2
+opencv 5.0.0
+dlib 20.0.1
+albumentations 1.4.21
+pillow 12.3.0
+scikit-learn 1.9.0
+pandas 3.0.5
+=== gpu visible ===
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+[PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')]

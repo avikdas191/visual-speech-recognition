@@ -1,0 +1,1 @@
+{"config": "c3_2conv_wide_d64_32", "dataset": "d138", "seed": 11, "params": 25768234, "train_samples": 1380, "epochs": 30, "batch": 16, "lr": 0.0001, "final_train_acc": 0.093478262424469, "final_val_acc": 0.10000000149011612, "best_val_acc": 0.10000000149011612, "best_val_loss": 2.3026039600372314, "best_epoch": 14, "seconds": 160.0}

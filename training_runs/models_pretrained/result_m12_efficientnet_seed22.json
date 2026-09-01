@@ -1,0 +1,1 @@
+{"config": "m12_efficientnet", "seed": 22, "total_params": 20108717, "trainable_params": 16059146, "final_train_acc": 0.9644444584846497, "final_val_acc": 0.7350000143051147, "best_val_acc": 0.7649999856948853, "best_val_loss": 0.7739806175231934, "best_epoch": 14, "seconds": 73.5}

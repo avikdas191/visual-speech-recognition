@@ -1,0 +1,1 @@
+{"config": "m13_eff_unfreeze20", "seed": 11, "total_params": 20108717, "trainable_params": 17410106, "epochs_run": 15, "train_samples": 900, "final_train_acc": 0.9888888597488403, "final_val_acc": 0.7149999737739563, "best_val_acc": 0.7599999904632568, "best_val_loss": 0.8217974305152893, "best_epoch": 5, "seconds": 81.1}

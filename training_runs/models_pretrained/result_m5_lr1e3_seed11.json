@@ -1,0 +1,1 @@
+{"config": "m5_lr1e3", "seed": 11, "total_params": 2270794, "trainable_params": 12810, "final_train_acc": 0.7044444680213928, "final_val_acc": 0.5099999904632568, "best_val_acc": 0.5199999809265137, "best_val_loss": 1.4443632364273071, "best_epoch": 14, "seconds": 53.6}

@@ -1,0 +1,1 @@
+{"config": "m2_midlayer", "seed": 55, "total_params": 67850, "trainable_params": 1930, "final_train_acc": 0.09333333373069763, "final_val_acc": 0.08500000089406967, "best_val_acc": 0.0949999988079071, "best_val_loss": 2.3187990188598633, "best_epoch": 15, "seconds": 42.4}

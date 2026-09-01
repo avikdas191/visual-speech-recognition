@@ -1,0 +1,1 @@
+{"config": "H_vol144", "seed": 55, "train_samples": 1860, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.7300000190734863, "best_val_acc": 0.7450000047683716, "best_val_loss": 0.8019001483917236, "best_epoch": 5, "seconds": 73.0}

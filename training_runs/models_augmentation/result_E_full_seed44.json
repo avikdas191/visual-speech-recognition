@@ -1,0 +1,1 @@
+{"config": "E_full", "seed": 44, "train_samples": 1380, "val_samples": 250, "final_train_acc": 1.0, "final_val_acc": 0.6880000233650208, "best_val_acc": 0.7120000123977661, "best_val_loss": 0.9143463373184204, "best_epoch": 11, "seconds": 59.5}

@@ -1,0 +1,351 @@
+Pretrained backbone experiments - results
+=========================================
+
+Twenty configurations across three ImageNet backbones, testing whether
+transfer learning beats the custom CNN on grid images.
+
+Outcome: it does not. The best pretrained configuration reaches 0.6533
+on the full test set against the baseline's 0.7150.
+
+Two configurations were promoted to test evaluation on validation
+evidence and both reversed. That failure is documented here because it
+repeats an error from the architecture stage and is the more important
+finding of the two.
+
+
+BACKGROUND
+----------
+A pretrained backbone was attempted during the original project in
+2024, alongside the 3D-CNN work. That attempt fed a 3D-CNN's flattened
+output through a helper that factorised the vector length to invent
+plausible height and width dimensions for ResNet50. The reshape was
+arbitrary, so the spatial structure it produced was meaningless and
+ImageNet's spatial filters had nothing real to operate on.
+
+This attempt is different: the input is a genuine 224x224 image with
+real spatial structure, which is what these models were built for.
+
+
+CONFIGURATION
+-------------
+All runs use 06_dataset_final, five seeds, Adam, batch 16, and
+backbone-specific input preprocessing rather than rescale=1/255 -
+MobileNetV2 expects [-1,1], VGG16 expects ImageNet mean subtraction in
+BGR order, EfficientNet has its own. Feeding the wrong distribution to
+a frozen backbone produces meaningless features.
+
+Frozen backbones are called with training=False so their batch
+normalisation layers use stored ImageNet statistics rather than
+recomputing from the current batches. This is a known source of poor
+frozen-backbone results when omitted.
+
+
+THE FIRST RESULT AND WHAT IT REVEALED
+-------------------------------------
+MobileNetV2 frozen with the standard head - global average pooling,
+dropout, Dense(10) - gave 0.310 mean validation. Prediction had been
+0.55 to 0.75.
+
+The diagnostic detail was that TRAINING accuracy was also 0.30. The
+model could not fit the training data either. This was the first
+configuration in the entire phase where training accuracy was not
+1.0000, and it pointed at the features rather than the head.
+
+Six diagnostic variants followed:
+
+  Config              Trainable   Mean val   Mean train
+  m0 GAP baseline        12,810     0.310      0.297
+  m1 Flatten            627,210     0.618      0.999
+  m2 mid-layer + GAP      1,930     0.121      0.100
+  m3 GAP + Dense(256)   330,506     0.481      0.605
+  m4 unfreeze 20      1,218,890     0.387      0.996
+  m5 lr 1e-3             12,810     0.512      0.714
+
+m1 against m0 is the finding. Same backbone, same frozen weights, same
+features - only global average pooling replaced by Flatten. 0.310 to
+0.618, and training accuracy from 0.297 to 0.999.
+
+The features were always sufficient. GAP was discarding what made them
+usable.
+
+This confirms the hypothesis formed during the architecture stage and
+then wrongly abandoned. In a mosaic image, spatial position IS frame
+index: the top-left cell is frame 1, the bottom-right is frame 60.
+Global average pooling collapses the 7x7 feature map into channel
+means, destroying which frame showed what. A model that cannot tell
+frame 3 from frame 47 cannot read lips.
+
+The architecture stage had tested a 1x1 convolution bottleneck (e1) as
+a position-preserving alternative, and it failed - which was taken as
+refuting the position argument. It failed for an unrelated reason: a
+narrow bottleneck feeding tanh dense layers. See
+architecture_experiments.txt, where this is corrected.
+
+Across all twenty configurations the pattern is consistent: every GAP
+configuration sits near chance (m0 0.310, m2 0.121), every Flatten
+configuration clears 0.42.
+
+m5 shows the frozen-GAP setup was also undertrained - 1e-3 lifts it
+from 0.310 to 0.512. Both problems were present at once.
+
+m4 is the classic small-data fine-tuning failure: 1.2M trainable
+parameters give training 0.996 and validation 0.387, with the widest
+seed spread of any configuration at 0.071.
+
+
+BACKBONE COMPARISON
+-------------------
+With the head fixed at Flatten + Dropout(0.2) + Dense(256, tanh) +
+Dense(10), only the backbone varying:
+
+  Backbone           15 epochs   40 epochs   80 epochs
+  EfficientNetB0       0.733       0.777       0.787
+  MobileNetV2          0.652         -           -
+  VGG16                0.607       0.715       0.732
+
+EfficientNetB0 > MobileNetV2 > VGG16 at every epoch count tested. The
+ordering matches their ImageNet accuracy ranking.
+
+This refutes the hypothesis under which VGG16 was run. The argument was
+that VGG's plain stacked 3x3 convolutions - no residual connections, no
+depthwise separation - produce more generic edge and texture detectors,
+which might transfer better to input that looks nothing like ImageNet
+than more specialised features would.
+
+VGG16 has the simplest architecture of the three and performs worst.
+Better source features transfer better; architectural simplicity does
+not help.
+
+EfficientNetB0's advantage over MobileNetV2 is large and clean: 0.733
+against 0.652 at identical head, identical hyperparameters, identical
+trainable parameter count (16,059,146 in both). Non-overlapping ranges.
+
+
+EPOCH COUNT - AN INHERITED DEFAULT
+----------------------------------
+Every configuration in this project trains for 15 epochs. That value
+was carried over from the original 2024 work and never questioned.
+
+Two of three backbones were substantially undertrained at 15:
+
+  VGG16           0.607 -> 0.715 -> 0.732   (+12.5 points to 80)
+  EfficientNetB0  0.733 -> 0.777 -> 0.787   (+5.4 points to 80)
+
+Both reach approximately 1.0000 training accuracy by 80 epochs, so
+there is little left to fit and further epochs would add little.
+
+The custom CNN baseline is not affected - it reaches 1.0000 training
+accuracy by epoch 9. But the inherited default was wrong for these
+models, and it is worth noting that no earlier stage tested it.
+
+
+THE FAILURE: VALIDATION GAINS THAT DID NOT TRANSFER
+---------------------------------------------------
+Two configurations were promoted to test evaluation:
+
+  m13  EfficientNetB0, top 20 layers unfrozen, 15 epochs
+  m14  EfficientNetB0, frozen, 40 epochs
+
+Validation results looked strong. Both reached 0.776-0.777 against the
+baseline's 0.718 - 5.9 points, clearing the 5-point margin set in
+advance. Neither range overlapped the baseline's: m13 ran 0.760-0.800,
+m14 0.750-0.810, baseline 0.700-0.735. Two independent mechanisms -
+feature adaptation and longer training - converged on the same figure,
+which appeared to rule out a single lucky configuration.
+
+Test results:
+
+                        Validation   Full test   Real only
+  baseline                 0.718       0.7150      0.7556
+  m13 unfreeze             0.776       0.6017      0.6593
+  m14 40 epochs            0.777       0.6533      0.6815
+
+m13 gained 5.8 points on validation and lost 11.3 on test.
+m14 gained 5.9 and lost 6.2.
+
+WHY
+
+Sixteen configurations had been evaluated against the same 200
+validation images by that point. With 200 images, one image is 0.5
+percentage points, so a 5.9-point gain is twelve images. Finding a
+configuration among sixteen that gets twelve particular images right is
+not difficult, and nothing about that transfers to a different set of
+nine recording sessions.
+
+This is the second occurrence of the same failure. The architecture
+stage produced a 2.8-point validation gain from twelve configurations
+that reversed by 4 points on test. That was treated as a lesson about
+selection pool size, and the response was to run fewer configurations
+per stage. The response was insufficient: the pool here was larger, the
+apparent evidence was stronger, and the reversal was worse.
+
+The specific mistake was treating non-overlapping seed ranges as
+evidence of transfer. Seed variance measures sensitivity to weight
+initialisation. It says nothing about whether a configuration's
+advantage on one set of 200 images generalises to a different set of
+recordings.
+
+A later configuration - m18, EfficientNetB0 at 80 epochs - reached
+0.787 with the tightest spread of anything tested, 0.780-0.795. It was
+NOT promoted to test. One point above two configurations that had
+already failed by the same measure is not grounds for spending a fourth
+look at the test set.
+
+
+COMPLETE RESULTS
+----------------
+  Config                  Backbone      Head     Epochs  Mean val   Std
+  m0_baseline             MobileNetV2   GAP        15     0.310    0.015
+  m1_flatten              MobileNetV2   Flatten    15     0.618    0.014
+  m2_midlayer             MobileNetV2   GAP        15     0.121    0.027
+  m3_densehead            MobileNetV2   GAP        15     0.481    0.009
+  m4_unfreeze20           MobileNetV2   GAP        15     0.387    0.071
+  m5_lr1e3                MobileNetV2   GAP        15     0.512    0.013
+  m6_flat_lr1e3           MobileNetV2   Flatten    15     0.599    0.008
+  m7_flat_dense           MobileNetV2   Flatten    15     0.652    0.012
+  m8_flat_dense_lr1e3     MobileNetV2   Flatten    15     0.382    0.052
+  m9_flat_unfreeze20      MobileNetV2   Flatten    15     0.426    0.031
+  m10_flat_dense_drop     MobileNetV2   Flatten    15     0.644    0.012
+  m11_flat_dense64        MobileNetV2   Flatten    15     0.627    0.010
+  m12_efficientnet        EfficientNet  Flatten    15     0.733    0.023
+  m13_eff_unfreeze20      EfficientNet  Flatten    15     0.776    0.018
+  m14_eff_epochs40        EfficientNet  Flatten    40     0.777    0.021
+  m15_eff_volume          EfficientNet  Flatten    15     0.736    0.009
+  m16_vgg16               VGG16         Flatten    15     0.607    0.025
+  m17_vgg16_epochs40      VGG16         Flatten    40     0.715    0.015
+  m18_eff_epochs80        EfficientNet  Flatten    80     0.787    0.006
+  m19_vgg16_epochs80      VGG16         Flatten    80     0.732    0.018
+
+m15 used the 138-images-per-word dataset rather than 90. It gave 0.736
+against m12's 0.733 on 900 images - within noise, consistent with the
+augmentation stage's finding that volume does not help.
+
+
+WHAT HOLDS UP
+-------------
+These are comparisons between configurations under identical
+conditions, not selections of a winner, so they are not subject to the
+failure described above:
+
+  - Global average pooling destroys the signal on mosaic input.
+    m0 0.310 against m1 0.618 with identical features.
+  - EfficientNetB0 features transfer substantially better than
+    MobileNetV2's, which transfer better than VGG16's.
+  - Architectural simplicity does not aid transfer to
+    out-of-distribution input.
+  - 15 epochs undertrains these models; VGG16 by 12.5 points.
+  - Frozen ImageNet features reach roughly 0.65 on the full test set at
+    best, against the custom CNN's 0.715.
+
+
+WHAT DOES NOT
+-------------
+  - Any claim that a pretrained backbone beats the baseline. On test,
+    the best of them loses by 6 points.
+
+
+DECISION
+--------
+The custom CNN baseline is retained. Pretrained backbones are recorded
+as tested and rejected.
+
+The test set has now been evaluated three times: once for the baseline,
+once for the architecture stage's selected configuration, and once for
+m13 and m14 together. Any remaining evaluation should be reserved for a
+result that is dramatic on validation rather than merely good - and, on
+the evidence of this stage, treated with suspicion even then.
+
+
+LOGS
+----
+  models_pretrained/pretrained_backbone_log.csv       validation, 20 configs
+  models_pretrained/history_*.csv                     per-run curves
+  models_pretrained_test/pretrained_test_log.csv      test, m13 and m14
+  models_pretrained_test/y_prob_*.npy                 raw predictions
+  
+  
+
+SEQUENCE MODELLING - ATTEMPTED AND ABANDONED
+============================================
+Alongside the pretrained backbones, a CNN+LSTM was attempted. It is
+recorded here rather than in its own document because it produced no
+results.
+
+
+WHY IT WAS WORTH TRYING
+-----------------------
+Every model in this project treats a spoken word as a static image.
+The grid representation converts time into spatial layout, and a
+convolution has no notion that the cell at position 1 comes before the
+cell at position 2. Whatever the model learns about motion, it learns
+implicitly from spatial arrangement.
+
+A sequence model reads the 60 frames in order, so temporal structure is
+explicit rather than inferred.
+
+Two pieces of evidence pointed at this being worth testing. The
+augmentation stage found that temporal augmentation beat photometric
+augmentation at higher volume (F 0.736 against G 0.690, non-overlapping
+ranges), suggesting temporal structure carries information the model
+was not fully using. And the original project's 3D-CNN attempt in
+build-2 had been groping toward the same thing before failing for
+unrelated reasons - a 554-million-parameter Flatten layer against 80
+training samples.
+
+
+DESIGN
+------
+  TimeDistributed(Conv2D 32) -> MaxPool
+  TimeDistributed(Conv2D 64) -> MaxPool
+  TimeDistributed(Flatten)
+  Dropout
+  LSTM(128)
+  Dropout -> Dense(10)
+
+Input shape (60, 80, 112, 3). No new data generation was required: the
+sequences already exist as 02_frames_cropped and 03_frames_augmented,
+and the split assignment carries over unchanged. Only a different
+loader was needed.
+
+A configurable worker was written covering LSTM and GRU cells,
+unidirectional and bidirectional, variable conv depth, an optional
+per-frame dense projection, and batch size - so the architecture could
+be swept the same way earlier stages were.
+
+
+WHY IT WAS ABANDONED
+--------------------
+The first run exhausted the 8 GB GPU at batch size 16, after
+approximately ten minutes.
+
+The memory demand is inherent to the design rather than a bug. Each
+sample carries 60 frames through the convolutional stack
+simultaneously, so activations are sixty times those of a single-image
+model. After two conv blocks each frame holds 20 x 28 x 64 = 35,840
+values, giving 2.15 million values per sample at the Flatten, and
+backpropagation retains intermediates for every layer. At batch 16 this
+is roughly 6.2 GB before the LSTM is reached.
+
+Options existed - batch size 8 or 4, a third conv block to shrink the
+per-frame tensor, or a per-frame dense projection to reduce 35,840
+features to a few hundred before the LSTM. The last is arguably the
+better architecture regardless, since feeding 35,840 features into an
+LSTM is unusual.
+
+The work was stopped on cost and confidence grounds rather than on
+results. Each failed run took ten minutes, the architecture was
+unfamiliar to the project author, and nothing elsewhere in the phase
+suggested a different model family would clear the 0.71-0.73 test band
+that everything else occupied.
+
+
+STATUS
+------
+Untested. The worker file
+(src/training/cnn_lstm_sequence_worker.py) is retained.
+
+This remains the most substantive untried direction in the project. It
+is the only approach considered that addresses the actual limitation -
+that a 2D convolution over a mosaic cannot perceive frame ordering -
+rather than working around it. Anyone continuing this work should start
+here, with a per-frame dense projection and batch size 8.

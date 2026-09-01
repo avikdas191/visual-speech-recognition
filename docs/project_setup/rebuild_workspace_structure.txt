@@ -1,0 +1,203 @@
+Rebuild workspace
+=================
+
+Intermediate and generated data for the lip reading dataset rebuild.
+Not part of the git repository - too large, and regenerable from the
+notebooks in lip_codebase_clean/src/.
+
+Source videos live in the archive at
+/mnt/d/lip_codebase/Data for lip reading model/Videos of 10 selected
+words named/ and are never modified.
+
+
+NAMING CONVENTION
+-----------------
+Numbered folders 01-06 follow the pipeline in order. Where a variant
+diverges from the main chain, it takes the number at which it diverges
+plus a letter suffix:
+
+  (none)  main chain: RGB, 224x224, original 16 augmentation types,
+          48 augmented training sets
+  b       aspect-ratio preserved, RGB, 224x267
+  g       grayscale, single channel
+  t       temporal augmentation swaps
+  p       photometric/geometric augmentation swaps
+  v       original types, 96 augmented training sets
+  f       original types, 96 sets, full 16-type evaluation coverage
+  ft      temporal swaps, 96 sets, full coverage
+  fp      photogeo swaps, 96 sets, full coverage
+  h       original types, 144 augmented training sets
+  i       original types, 192 sets
+  j       original types, 288 sets
+
+
+PIPELINE
+--------
+  01_frames_original/            60 frames per video, 36,000 total
+                                 shared by every variant
+
+  02_frames_cropped/             dlib lip crops, 112x80, RGB
+  02g_frames_cropped_gray/       same, single channel
+
+  03_frames_augmented/           70 augmented sets   (48 train)
+  03g_frames_augmented_gray/     70                  grayscale
+  03t_frames_augmented_temporal/ 70                  temporal swaps
+  03p_frames_augmented_photogeo/ 70                  photogeo swaps
+  03v_frames_augmented_volume/  118                  (96 train)
+  03f_frames_augmented_full/    128                  (96 train, 16 eval)
+  03ft_frames_augmented_full_temporal/  128
+  03fp_frames_augmented_full_photogeo/  128
+  03h_frames_augmented_vol144/  166                  (144 train)
+  03i_frames_augmented_vol192/  214                  (192 train)
+  03j_frames_augmented_vol288/  310                  (288 train)
+
+  04_grids_combined/             6x10 grids, 672x800
+  04g_grids_combined_gray/
+  04t_grids_temporal/    04p_grids_photogeo/    04v_grids_volume/
+  04f_grids_full/        04ft_grids_full_temporal/
+  04fp_grids_full_photogeo/
+  04h_grids_vol144/      04i_grids_vol192/      04j_grids_vol288/
+
+  05_grids_resized/                    224x224, RGB
+  05b_grids_aspect_preserved/          224x267, RGB
+  05g_grids_resized_gray/              224x224, grayscale
+  05t_ 05p_ 05v_ 05f_ 05ft_ 05fp_      224x224
+  05h_ 05i_ 05j_                       224x224
+
+  06_dataset_final/              Train/Validation/Test by word
+  06b_dataset_aspect_preserved/  06g_dataset_gray/
+  06t_dataset_temporal/          06p_dataset_photogeo/
+  06v_dataset_volume/            06f_dataset_full/
+  06ft_dataset_full_temporal/    06fp_dataset_full_photogeo/
+  06h_dataset_vol144/  06i_dataset_vol192/  06j_dataset_vol288/
+
+  06_test_real_only/             9 real recordings per class, no
+  06b_ 06g_ 06t_ 06p_ 06v_       augmentation - the primary
+  06f_ 06ft_ 06fp_               generalisation measurement
+  06h_ 06i_ 06j_
+
+
+DATASET SIZES
+-------------
+  Variant                    Train/word   Val/word   Test/word
+  main, b, g, t, p                 90         20          20
+  v                               138         20          20
+  f, ft, fp                       138         25          25
+  h                               186         20          20
+  i                               234         20          20
+  j                               330         20          20
+
+Train is 42 real recordings plus augmented sets. Validation and test
+are 9 real recordings plus augmented sets. The real recordings are
+identical across every variant.
+
+
+WHERE THE VARIANTS DIVERGE
+--------------------------
+ASPECT (b) - diverges at the resize step only. The 672x800 grid is
+scaled by 0.333 in both directions to 224x267, preserving each lip
+crop's 1.40 aspect ratio. The main chain forces 224x224, stretching
+each crop horizontally by 19%.
+
+GRAYSCALE (g) - diverges at the crop stage, so that augmentation runs
+on grayscale as a genuine grayscale pipeline would. Applying colour
+augmentations and then discarding colour would test something that
+does not exist. Two augmentation changes: RGBShift becomes
+RandomGamma(60,140), and ProcessCroppedImage applies CLAHE directly to
+the single channel rather than via LAB conversion.
+
+TEMPORAL (t, ft) - the four weakest original types by measured pixel
+change (TemporalShift 0.00, OpticalDistortion 2.59, GaussianBlur 2.49,
+Downsample 2.08) are replaced by FrameMorph, DropRefill, SmoothDrift
+and CoarseDropout. The first three operate across all 60 frames rather
+than per frame - nothing in the original set touched temporal
+structure.
+
+PHOTOGEO (p, fp) - the same four types replaced instead by
+RandomShadow, CLAHEVarying, GridDistortion and ElasticTransform.
+
+VOLUME (v, h, i, j) - original 16 types, more augmented sets:
+96, 144, 192 and 288 for training. Evaluation stays at 11 augmented
+sets so the figures remain comparable.
+
+FULL COVERAGE (f, ft, fp) - 16 augmented sets in validation and test
+instead of 11, giving one of every augmentation type. With only 11
+slots, five types are always absent from evaluation. Figures from
+these three are not comparable to the others.
+
+
+AUGMENTATION PLAN ASSIGNMENT
+----------------------------
+Two algorithms build the plans.
+
+The original shuffles the type list and retries until no recording
+session receives the same type twice. This works up to six uses per
+type.
+
+At nine or more uses (h, i, j) most sessions must receive seven or
+more distinct types from sixteen, and random shuffling cannot satisfy
+this - five hundred attempts failed. Those plans use a constructive
+method that deals types out in rounds, choosing the session with the
+most remaining slots that has not yet received that type.
+
+Dispatch is on uses per type: six or fewer takes the original path, so
+the earlier plans regenerate identically.
+
+
+OTHER FOLDERS
+-------------
+  logs/                          provenance and run logs
+  models_comparison/             architecture search
+  models_refinements/            training refinements
+  models_input_representation/   aspect and grayscale
+  models_augmentation/           augmentation composition and volume
+  model_rebuilt_data.h5          the baseline model
+
+
+LOGS
+----
+  frame_extraction_log.csv            per video: source frames, padding
+  crop_detection_log.csv              per video: detection successes
+  augmentation_candidate_measurement_log.csv
+                                      pixel change and stochasticity
+                                      for every candidate type
+  augmentation_plan_*_log.csv         nine plans: which session and
+                                      type produced each augmented set
+  augmentation_generated_*_log.csv    actual output per plan
+  grid_assembly_log.csv               and _gray_ variant
+  resize_log.csv                      and _aspect_preserved_ variant
+  final_image_mapping_log.csv         every final image to its source
+  final_image_mapping_*_log.csv       per variant
+  training_history_log.csv            baseline training curve
+  class_labels_rebuilt.json
+
+final_image_mapping_log.csv is the important one. It records which
+recording session produced each image in the finished dataset. The
+aspect and grayscale variants reuse it unchanged, so image 001.png in
+Test/bat comes from the same session in all three.
+
+
+REGENERATING
+------------
+  src/data_prep/generate_rebuilt_dataset.ipynb
+      main RGB chain, stages 01-06
+
+  src/data_prep/generate_aspect_and_grayscale_datasets.ipynb
+      aspect and grayscale variants
+
+  src/data_prep/augmentation_candidate_measurement.ipynb
+      measures candidate augmentation types
+
+  src/data_prep/generate_augmentation_variant_datasets.ipynb
+      the nine augmentation variants
+
+Every random operation is seeded. Split seed 4, augmentation seed 101
+for the main chain, 201-209 for the variants.
+
+
+DISK
+----
+Roughly 800,000 augmented frames and 18,000 grid images across all
+variants. If space is needed, the 03* and 04* intermediate folders can
+be deleted - the 06* datasets are what training reads, and the
+intermediates regenerate from the plans.

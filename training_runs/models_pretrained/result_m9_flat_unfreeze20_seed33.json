@@ -1,0 +1,1 @@
+{"config": "m9_flat_unfreeze20", "seed": 33, "total_params": 2885194, "trainable_params": 1833290, "final_train_acc": 0.9977777600288391, "final_val_acc": 0.4449999928474426, "best_val_acc": 0.4449999928474426, "best_val_loss": 2.454461097717285, "best_epoch": 15, "seconds": 61.1}

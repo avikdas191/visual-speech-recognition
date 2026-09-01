@@ -1,0 +1,1 @@
+{"config": "m4_unfreeze20", "seed": 22, "total_params": 2270794, "trainable_params": 1218890, "final_train_acc": 0.9977777600288391, "final_val_acc": 0.38499999046325684, "best_val_acc": 0.39500001072883606, "best_val_loss": 2.691882848739624, "best_epoch": 1, "seconds": 60.3}

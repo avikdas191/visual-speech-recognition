@@ -1,0 +1,135 @@
+Grid assembly, resizing and final dataset structure
+===================================================
+
+Covers the three stages after augmentation: tiling frames into grid
+images, downscaling them, and sorting them into the split folders.
+
+Input:  02_frames_cropped/ (60 real sessions)
+        03_frames_augmented/ (70 augmented sets)
+Output: 06_dataset_final/Train|Validation|Test/word/001.png ...
+
+
+WHY A GRID IMAGE
+----------------
+The 60 frames of one spoken word are tiled into a single image,
+10 rows by 6 columns, filled left to right and top to bottom.
+
+This converts a video classification problem into an image
+classification problem. The temporal sequence becomes spatial layout,
+so an ordinary 2D CNN can be used instead of a 3D CNN or a recurrent
+model. The original project adopted this after a 3D CNN approach
+failed - see audit_notes.md section 3.1.
+
+Each crop is 112x80, so a grid is 672 wide by 800 tall.
+1,300 grids were built: 130 sets x 10 words.
+
+
+RESIZE TO 224x224
+-----------------
+Grids are downscaled to 224x224 using PIL with LANCZOS resampling.
+
+PIL rather than OpenCV, and LANCZOS specifically, because that is what
+the original pipeline used. Different resampling algorithms produce
+different pixel values, and the deployed model was trained on LANCZOS
+output.
+
+Note for later work: this downscale is severe. A 112x80 lip crop 
+occupies roughly 37x22 pixels in the final image, and is stretched 
+horizontally by about 19% because the 672x800 grid is forced into a 
+square 224x224. Whatever detail distinguishes one mouth shape from 
+another has to survive that reduction. This is inherent to the original
+design and was kept unchanged for comparability, but it is a plausible 
+ceiling on achievable accuracy and a candidate for revision.
+
+Grid: 6 columns × 112 px = 672 wide
+      10 rows   ×  80 px = 800 tall
+
+Resized to 224 × 224:
+  horizontal scale = 224 / 672 = 0.333
+  vertical scale   = 224 / 800 = 0.280
+
+Cell width  = 112 × 0.333 = 37.3 px
+Cell height =  80 × 0.280 = 22.4 px
+
+
+FINAL STRUCTURE AND NUMBERING
+-----------------------------
+Images are sorted into Train, Validation and Test, each containing one
+folder per word. Folder names are the class labels - the training
+generator reads labels from folder names and ignores filenames.
+
+Within each word folder, images are numbered 001.png onward, with real
+recordings first and augmented images after:
+
+  Train:      001-042 real, 043-090 augmented
+  Validation: 001-009 real, 010-020 augmented
+  Test:       001-009 real, 010-020 augmented
+
+This ordering is deliberate. It allows the test set to be evaluated
+twice from the same trained model: once on all 20 images per word for
+direct comparison with the original dataset, and once on images
+001-009 only - the real recordings, with no augmentation at all.
+
+The real-only figure is the primary measurement. It is smaller
+(9 images per class, 90 total) but every image is an independent
+recording the model has never encountered in any form.
+
+Split assignment comes from two sources: real sessions are looked up
+in session_split_assignment.csv, augmented sets carry their split in
+their folder name.
+
+
+VERIFICATION
+------------
+After assembly, every final image was traced back to the recording
+session it ultimately derives from - directly for real images, via the
+augmentation plan for augmented ones.
+
+  Sessions appearing in more than one split: 0
+  Sessions per split: train 42, validation 9, test 9
+
+This confirms from the data itself, rather than from the code that
+produced it, that no recording session contributes to more than one
+split. This is the property the original dataset lacked.
+
+
+POINTS TO NOTE
+--------------
+Grid assembly requires exactly 60 frames and rejects any folder that
+has a different count. In the original pipeline this was silent: a
+single face-detection failure would drop that word from the dataset
+without the loss being recorded anywhere. Here the count was verified
+before assembly and all 1,300 grids built without incident.
+
+Filenames carry full provenance through stages 04 and 05
+(set_01_bat.png, aug_train_01_bat.png) and are renumbered only at the
+final stage. logs/final_image_mapping_log.csv records the mapping, so
+any image in the finished dataset can be traced to its origin.
+
+
+FOR FURTHER IMPROVEMENT
+-----------------------
+Three observations from this stage worth revisiting:
+
+1. The 224x224 downscale destroys most of the per-frame detail.
+   Alternatives: a larger input size, fewer frames per grid, or
+   abandoning the grid representation entirely.
+
+2. Grid layout is fixed at 10 rows x 6 columns with no separation 
+   between cells. The convolution kernels see across cell boundaries, 
+   mixing pixels from frames that are 6 apart in time. Whether this 
+   helps or hurts is untested.
+
+3. Colour is retained throughout, but lip reading depends on shape and
+   motion rather than colour. Greyscale would reduce input channels
+   threefold. This was noted in the original project logbook on
+   28 November and never tested; the reason it was dropped earlier -
+   pretrained ImageNet models requiring three channels - no longer
+   applies to a custom CNN.
+
+
+LOGS
+----
+logs/grid_assembly_log.csv        - dimensions and status per grid
+logs/resize_log.csv               - source dimensions per image
+logs/final_image_mapping_log.csv  - final number to source mapping

@@ -1,0 +1,1 @@
+{"config": "v1_rgb_aspect", "seed": 22, "params": 60609098, "final_train_acc": 1.0, "final_val_acc": 0.7149999737739563, "best_val_acc": 0.7149999737739563, "best_val_loss": 0.9274624586105347, "best_epoch": 11, "seconds": 50.5}

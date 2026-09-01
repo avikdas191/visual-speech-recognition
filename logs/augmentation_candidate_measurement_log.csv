@@ -1,0 +1,12 @@
+name,kind,shape_ok,stochastic,mean_change,frames_changed,error
+CoarseDropout,frame,TRUE,TRUE,3.93,n/a,
+GridDistortion,frame,TRUE,TRUE,10.52,n/a,
+RandomShadow,frame,TRUE,TRUE,29.37,n/a,
+CLAHEVarying,frame,TRUE,TRUE,22.53,n/a,
+ElasticTransform,frame,TRUE,TRUE,4.27,n/a,
+MotionBlur,frame,TRUE,TRUE,2.9,n/a,
+ISONoise,frame,TRUE,TRUE,1.43,n/a,
+FrameMorph,sequence,TRUE,TRUE,2.62,58,
+DropRefill,sequence,TRUE,TRUE,3.67,55,
+SmoothDrift,sequence,TRUE,TRUE,4.04,46,
+RateVariation,sequence,TRUE,FALSE,6.94,58,

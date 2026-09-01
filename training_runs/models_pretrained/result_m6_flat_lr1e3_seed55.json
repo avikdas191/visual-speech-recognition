@@ -1,0 +1,1 @@
+{"config": "m6_flat_lr1e3", "seed": 55, "total_params": 2885194, "trainable_params": 627210, "final_train_acc": 0.9766666889190674, "final_val_acc": 0.5600000023841858, "best_val_acc": 0.6100000143051147, "best_val_loss": 3.937828779220581, "best_epoch": 14, "seconds": 52.7}

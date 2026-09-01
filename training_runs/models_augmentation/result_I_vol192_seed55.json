@@ -1,0 +1,1 @@
+{"config": "I_vol192", "seed": 55, "train_samples": 2340, "val_samples": 200, "final_train_acc": 1.0, "final_val_acc": 0.7549999952316284, "best_val_acc": 0.7699999809265137, "best_val_loss": 0.7438014149665833, "best_epoch": 8, "seconds": 87.5}

@@ -1,0 +1,1 @@
+{"config": "c4_2conv_k5_d128_64", "dataset": "d138", "seed": 33, "params": 25752842, "train_samples": 1380, "epochs": 30, "batch": 16, "lr": 0.0001, "final_train_acc": 1.0, "final_val_acc": 0.6949999928474426, "best_val_acc": 0.7300000190734863, "best_val_loss": 0.792185366153717, "best_epoch": 8, "seconds": 105.4}
