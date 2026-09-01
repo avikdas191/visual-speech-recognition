@@ -178,6 +178,8 @@ more useful for understanding how the system works.
 *Each stage of the pipeline reports itself. The recognised word and the
 generated sentence appear in green on the right.*
 
+<img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
+
 ![Web application ready for another recording](docs/media/web_application_reset.png)
 
 *The blue button clears the trail and starts a new session without reopening the
