@@ -160,7 +160,6 @@ Gesture controlled: an open hand starts recording, a closed fist ends it.
 
 <video src="https://github.com/avikdas191/visual-speech-recognition/blob/main/docs/media/desktop_application_demo.mp4" controls="controls" width="100%">
 </video>
-
 https://github.com/avikdas191/visual-speech-recognition/blob/main/docs/media/desktop_application_demo.mp4
 
 *The full sequence, from gesture to generated sentence. The upper face and
