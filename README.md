@@ -158,7 +158,13 @@ Two are included, and the difference between them is deliberate.
 A single window with the camera preview, progress reporting and the result.
 Gesture controlled: an open hand starts recording, a closed fist ends it.
 
-
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/195a2515-0dda-406e-8219-e62e8771b090" controls="controls" width="85%">
+  </video>
+  <br>
+  <em>Demo: Live application walkthrough and dashboard interface</em>
+</p>
+asd
 
 https://github.com/user-attachments/assets/195a2515-0dda-406e-8219-e62e8771b090
 
