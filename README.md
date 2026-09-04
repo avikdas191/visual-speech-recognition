@@ -170,23 +170,17 @@ a locally served page reporting every step. Slower and more awkward than the
 desktop application, but it keeps the full processing trail visible, which is
 more useful for understanding how the system works.
 
-<p align="center">
-  <img src="docs/media/web_application_start.png" width="600" alt="Web application at startup">
-  <br>
-  <em>Startup: both models load, then the camera opens.</em>
-</p>
+<img src="docs/media/web_application_start.png" width="600" alt="Web application at startup">
+  
+*Startup: both models load, then the camera opens.*
 
-<p align="center">
-  <img src="docs/media/web_application_processing.png" width="600" alt="Web application during processing">
-  <br>
-  <em>Each stage of the pipeline reports itself. The recognised word and the generated sentence appear in green on the right.</em>
-</p>
+<img src="docs/media/web_application_processing.png" width="600" alt="Web application during processing">
 
-<p align="center">
-  <img src="docs/media/web_application_reset.png" width="600" alt="Web application ready for another recording">
-  <br>
-  <em>The blue button clears the trail and starts a new session without reopening the camera.</em>
-</p>
+*Each stage of the pipeline reports itself. The recognised word and the generated sentence appear in green on the right.*
+
+<img src="docs/media/web_application_reset.png" width="600" alt="Web application ready for another recording">
+
+*The blue button clears the trail and starts a new session without reopening the camera.*
 
 Both applications import the same pipeline module, so both run identical
 processing.
