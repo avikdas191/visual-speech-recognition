@@ -38,6 +38,7 @@ gesture starts recording
 ```
 
 <img src="docs/media/grid_image_eat.png" width="450" alt="Grid image assembled from 60 lip crops">
+
 *A complete input to the model: 60 lip crops from one recording, tiled six columns across and ten rows down.
 Reading left to right, top to bottom, the sequence is the mouth movement over time.*
 
@@ -168,12 +169,15 @@ desktop application, but it keeps the full processing trail visible, which is
 more useful for understanding how the system works.
 
 <img src="docs/media/web_application_start.png" width="600" alt="Web application at startup">
+
 *Startup: both models load, then the camera opens.*
 
 <img src="docs/media/web_application_processing.png" width="600" alt="Web application during processing">
+
 *Each stage of the pipeline reports itself. The recognised word and the generated sentence appear in green on the right.*
 
 <img src="docs/media/web_application_reset.png" width="600" alt="Web application ready for another recording">
+
 *The blue button clears the trail and starts a new session without reopening the camera.*
 
 Both applications import the same pipeline module, so both run identical
