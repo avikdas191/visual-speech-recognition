@@ -81,9 +81,9 @@ The rebuilt dataset splits by recording session before augmentation, so no
 augmented image derives from a session in a different split. This was verified
 after assembly: zero sessions appear in more than one split.
 
-71.50% is the lower number and the honest one. The gap between the two is the
-most instructive result in the project, and the reason the reconstruction was
-worth doing.
+The 71.50% accuracy directly compares to the original result, as both are 
+measured on a full test set of 20 images per word. However, the 75.56% on real 
+recordings alone is the cleaner estimate of generalisation.
 
 ### Sentence generation
 
@@ -251,6 +251,14 @@ dataset, not a defect in the method.
 The rule of selecting on validation and touching test once was set in advance
 and followed, and it was still not sufficient. The size of the selection pool
 relative to the validation set's resolution is the part that needs controlling.
+
+**Augmentation was applied before the train/validation split.** Because the
+dataset is too small for training CNN models, augmentation was used to
+increase its size. During the configuration search it was applied before the
+split, so validation scores from those runs are not clean and were used only
+to compare configurations. However the **reported test result is clean**: the 
+test set contains no augmented samples and was never used for training or
+configuration selection.
 
 ---
 
